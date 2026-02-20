@@ -82,12 +82,12 @@
                 {% for event in upcoming_events %}
                 <div class="event-item">
                     <div class="event-date">
-                        <span class="event-day">{{ event.start_time | date(format="%d") }}</span>
-                        <span class="event-month">{{ event.start_time | date(format="%b") }}</span>
+                        <span class="event-day">{{ event.start_time.format("%d") }}</span>
+                        <span class="event-month">{{ event.start_time.format("%b") }}</span>
                     </div>
                     <div class="event-info">
                         <h4>{{ event.title }}</h4>
-                        <p class="event-time">{{ event.start_time | date(format="%H:%M") }} - {{ event.end_time | date(format="%H:%M") }}</p>
+                        <p class="event-time">{{ event.start_time.format("%H:%M") }} - {{ event.end_time.format("%H:%M") }}</p>
                         {% match event.location %}
                             {% when Some with (loc) %}
                                 <p class="event-location">📍 {{ loc }}</p>

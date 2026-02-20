@@ -33,6 +33,7 @@ pub async fn initialize_database(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub async fn check_database_schema(pool: &SqlitePool) -> Result<bool, sqlx::Error> {
     let tables_exist = sqlx::query("SELECT name FROM sqlite_master WHERE type = 'table'")
         .fetch_all(pool)

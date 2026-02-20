@@ -89,6 +89,7 @@ pub async fn register(
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct GetCalendarsParams {
     pub include_events: Option<bool>,
 }

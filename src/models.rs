@@ -57,6 +57,7 @@ pub enum PermissionLevel {
     Admin,
 }
 
+#[allow(dead_code)]
 impl PermissionLevel {
     pub fn as_str(&self) -> &'static str {
         match self {

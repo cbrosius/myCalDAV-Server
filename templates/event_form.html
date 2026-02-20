@@ -24,7 +24,7 @@
         <div class="form-group">
             <label for="title">Event Title *</label>
             <input type="text" id="title" name="title" required 
-                   value="{{ event.title.unwrap_or_default() }}"
+                   value="{% match event.title %}{% when Some with (t) %}{{ t }}{% when None %}{% endmatch %}"
                    placeholder="Enter event title">
         </div>
         
@@ -32,7 +32,7 @@
             <label for="calendar_id">Calendar *</label>
             <select id="calendar_id" name="calendar_id" required>
                 {% for cal in calendars %}
-                <option value="{{ cal.id }}" {% if selected_calendar_id == Some(cal.id) %}selected{% endif %}>
+                <option value="{{ cal.id }}" {% if self.is_calendar_selected(cal.id) %}selected{% endif %}>
                     {{ cal.name }}
                 </option>
                 {% endfor %}
@@ -43,19 +43,19 @@
             <div class="form-group">
                 <label for="start_time">Start Time *</label>
                 <input type="datetime-local" id="start_time" name="start_time" required
-                       value="{{ event.start_time.map(|t| t.format(\"%Y-%m-%dT%H:%M\")).unwrap_or_default() }}">
+                       value="{% match event.start_time %}{% when Some with (t) %}{{ t.format("%Y-%m-%dT%H:%M") }}{% when None %}{% endmatch %}">
             </div>
             <div class="form-group">
                 <label for="end_time">End Time *</label>
                 <input type="datetime-local" id="end_time" name="end_time" required
-                       value="{{ event.end_time.map(|t| t.format(\"%Y-%m-%dT%H:%M\")).unwrap_or_default() }}">
+                       value="{% match event.end_time %}{% when Some with (t) %}{{ t.format("%Y-%m-%dT%H:%M") }}{% when None %}{% endmatch %}">
             </div>
         </div>
         
         <div class="form-group">
             <label class="checkbox-label">
                 <input type="checkbox" name="is_all_day" id="is_all_day" 
-                       {% if event.is_all_day.unwrap_or(false) %}checked{% endif %}
+                       {% match event.is_all_day %}{% when Some with (true) %}checked{% when Some with (false) %}{% when None %}{% endmatch %}
                        onchange="toggleAllDay(this.checked)">
                 <span>All-day event</span>
             </label>
@@ -64,14 +64,14 @@
         <div class="form-group">
             <label for="location">Location</label>
             <input type="text" id="location" name="location" 
-                   value="{{ event.location.unwrap_or_default() }}"
+                   value="{% match event.location %}{% when Some with (l) %}{{ l }}{% when None %}{% endmatch %}"
                    placeholder="Enter location (optional)">
         </div>
         
         <div class="form-group">
             <label for="description">Description</label>
             <textarea id="description" name="description" rows="4"
-                      placeholder="Enter event description (optional)">{{ event.description.unwrap_or_default() }}</textarea>
+                      placeholder="Enter event description (optional)">{% match event.description %}{% when Some with (d) %}{{ d }}{% when None %}{% endmatch %}</textarea>
         </div>
         
         <div class="form-actions">

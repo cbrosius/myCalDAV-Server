@@ -74,7 +74,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .route("/calendars/{id}/", any(handlers::caldav_get))
         .route("/calendars/{id}/{event}", any(handlers::caldav_get))
         // MKCOL for creating calendars via CalDAV
-        .route("/calendars/new", axum::routing::method_routing::on(axum::http::Method::from_bytes(b"MKCOL").unwrap(), handlers::caldav_mkcol))
+        .route("/calendars/new", any(handlers::caldav_mkcol))
         // Web UI routes - Authentication
         .route("/web/login", get(handlers::web::login_page).post(handlers::web::login_handler))
         .route("/web/register", get(handlers::web::register_page).post(handlers::web::register_handler))

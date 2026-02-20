@@ -1,9 +1,10 @@
 use axum::{
     extract::{Form, Path, Query, State, Extension},
-    http::{StatusCode, Uri},
+    http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
 };
-use serde::{Deserialize, Serialize};
+use askama::Template;
+use serde::Deserialize;
 use std::collections::HashMap;
 use uuid::Uuid;
 use chrono::{Duration, Utc};
@@ -81,7 +82,7 @@ pub async fn login_page(
 ) -> Result<Html<String>, AppError> {
     // If already logged in, redirect to dashboard
     if user.0.is_some() {
-        return Ok(Html::new(format!("<script>window.location.href='/web/dashboard';</script>")));
+        return Ok(Html(format!("<script>window.location.href='/web/dashboard';</script>")));
     }
     
     let template = LoginTemplate {
@@ -131,7 +132,7 @@ pub async fn register_page(
 ) -> Result<Html<String>, AppError> {
     // If already logged in, redirect to dashboard
     if user.0.is_some() {
-        return Ok(Html::new(format!("<script>window.location.href='/web/dashboard';</script>")));
+        return Ok(Html(format!("<script>window.location.href='/web/dashboard';</script>")));
     }
     
     let template = RegisterTemplate {

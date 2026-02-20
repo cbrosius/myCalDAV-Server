@@ -58,16 +58,16 @@
             {% for event in events %}
             <div class="event-item">
                 <div class="event-date">
-                    <span class="event-day">{{ event.start_time | date(format="%d") }}</span>
-                    <span class="event-month">{{ event.start_time | date(format="%b") }}</span>
+                    <span class="event-day">{{ event.start_time.format("%d") }}</span>
+                    <span class="event-month">{{ event.start_time.format("%b") }}</span>
                 </div>
                 <div class="event-info">
                     <h4>
                         <a href="/web/events/{{ event.id }}">{{ event.title }}</a>
                     </h4>
                     <p class="event-time">
-                        {{ event.start_time | date(format="%Y-%m-%d %H:%M") }} - 
-                        {{ event.end_time | date(format="%H:%M") }}
+                        {{ event.start_time.format("%Y-%m-%d %H:%M") }} - 
+                        {{ event.end_time.format("%H:%M") }}
                     </p>
                     {% match event.location %}
                         {% when Some with (loc) %}
@@ -102,7 +102,7 @@
             {% for share in shares %}
             <div class="share-item">
                 <div class="share-info">
-                    <span class="share-email">{{ share.shared_with_email.unwrap_or_default() }}</span>
+                    <span class="share-email">{% match share.shared_with_email %}{% when Some with (e) %}{{ e }}{% when None %}{% endmatch %}</span>
                     <span class="share-permission badge">{{ share.permission }}</span>
                 </div>
                 <form action="/web/shares/{{ share.id }}/delete" method="post" class="inline-form">

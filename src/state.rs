@@ -4,10 +4,12 @@
 use sqlx::sqlite::SqlitePool;
 
 /// Application state container
+#[allow(dead_code)]
 pub struct AppState {
     pub db_pool: SqlitePool,
 }
 
+#[allow(dead_code)]
 impl AppState {
     pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
         let db_pool = SqlitePool::connect(database_url).await?;

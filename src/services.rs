@@ -67,21 +67,21 @@ impl CalendarService {
         let now = Utc::now();
         let id = Uuid::new_v4();
         
-        let user = sqlx::query_as::<_, User>(
-            r#"
-            INSERT INTO users (id, name, email, password_hash, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?, ?)
-            RETURNING id, name, email, password_hash, created_at, updated_at
-            "#
+        sqlx::query(
+            "INSERT INTO users (id, name, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
         )
         .bind(id.to_string())
-        .bind(new_user.name)
-        .bind(new_user.email)
-        .bind(password_hash)
+        .bind(&new_user.name)
+        .bind(&new_user.email)
+        .bind(&password_hash)
         .bind(now)
         .bind(now)
-        .fetch_one(&self.pool)
+        .execute(&self.pool)
         .await?;
+
+        // Fetch the user back
+        let user = self.get_user_by_id(id).await?
+            .ok_or_else(|| AppError::InternalServerError("Failed to fetch created user".to_string()))?;
 
         Ok(user)
     }
@@ -146,23 +146,23 @@ impl CalendarService {
         let now = Utc::now();
         let id = Uuid::new_v4();
         
-        let calendar = sqlx::query_as::<_, Calendar>(
-            r#"
-            INSERT INTO calendars (id, user_id, name, description, color, is_public, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id, user_id, name, description, color, is_public, created_at, updated_at
-            "#
+        sqlx::query(
+            "INSERT INTO calendars (id, user_id, name, description, color, is_public, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(id.to_string())
         .bind(user_id.to_string())
-        .bind(new_calendar.name)
-        .bind(new_calendar.description)
-        .bind(new_calendar.color)
+        .bind(&new_calendar.name)
+        .bind(&new_calendar.description)
+        .bind(&new_calendar.color)
         .bind(new_calendar.is_public)
         .bind(now)
         .bind(now)
-        .fetch_one(&self.pool)
+        .execute(&self.pool)
         .await?;
+
+        // Fetch the calendar back
+        let calendar = self.get_calendar_by_id(id).await?
+            .ok_or_else(|| AppError::InternalServerError("Failed to fetch created calendar".to_string()))?;
 
         Ok(calendar)
     }
@@ -258,25 +258,25 @@ impl CalendarService {
         let now = Utc::now();
         let id = Uuid::new_v4();
         
-        let event = sqlx::query_as::<_, Event>(
-            r#"
-            INSERT INTO events (id, calendar_id, title, description, location, start_time, end_time, is_all_day, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id, calendar_id, title, description, location, start_time, end_time, is_all_day, created_at, updated_at
-            "#
+        sqlx::query(
+            "INSERT INTO events (id, calendar_id, title, description, location, start_time, end_time, is_all_day, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(id.to_string())
         .bind(calendar_id.to_string())
-        .bind(new_event.title)
-        .bind(new_event.description)
-        .bind(new_event.location)
+        .bind(&new_event.title)
+        .bind(&new_event.description)
+        .bind(&new_event.location)
         .bind(new_event.start_time)
         .bind(new_event.end_time)
         .bind(new_event.is_all_day)
         .bind(now)
         .bind(now)
-        .fetch_one(&self.pool)
+        .execute(&self.pool)
         .await?;
+
+        // Fetch the event back
+        let event = self.get_event_by_id(id).await?
+            .ok_or_else(|| AppError::InternalServerError("Failed to fetch created event".to_string()))?;
 
         Ok(event)
     }
@@ -378,12 +378,8 @@ impl CalendarService {
         // Try to find user by email
         let shared_with_user = self.get_user_by_email(&new_share.shared_with_email).await?;
         
-        let share = sqlx::query_as::<_, Share>(
-            r#"
-            INSERT INTO shares (id, calendar_id, user_id, shared_with_user_id, shared_with_email, permission_level, created_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            RETURNING id, calendar_id, user_id, shared_with_user_id, shared_with_email, permission_level, created_at
-            "#
+        sqlx::query(
+            "INSERT INTO shares (id, calendar_id, user_id, shared_with_user_id, shared_with_email, permission_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(id.to_string())
         .bind(calendar_id.to_string())
@@ -392,8 +388,17 @@ impl CalendarService {
         .bind(&new_share.shared_with_email)
         .bind(&new_share.permission)
         .bind(now)
-        .fetch_one(&self.pool)
+        .execute(&self.pool)
         .await?;
+
+        // Fetch the share back
+        let share = sqlx::query_as::<_, Share>(
+            "SELECT id, calendar_id, user_id, shared_with_user_id, shared_with_email, permission_level, created_at FROM shares WHERE id = ?"
+        )
+        .bind(id.to_string())
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| AppError::InternalServerError("Failed to fetch created share".to_string()))?;
 
         Ok(share)
     }

@@ -12,21 +12,21 @@
         <div class="form-group">
             <label for="name">Calendar Name *</label>
             <input type="text" id="name" name="name" required 
-                   value="{{ calendar.name.unwrap_or_default() }}"
+                   value="{% match calendar.name %}{% when Some with (n) %}{{ n }}{% when None %}{% endmatch %}"
                    placeholder="Enter calendar name">
         </div>
         
         <div class="form-group">
             <label for="description">Description</label>
             <textarea id="description" name="description" rows="3"
-                      placeholder="Enter calendar description (optional)">{{ calendar.description.unwrap_or_default() }}</textarea>
+                      placeholder="Enter calendar description (optional)">{% match calendar.description %}{% when Some with (d) %}{{ d }}{% when None %}{% endmatch %}</textarea>
         </div>
         
         <div class="form-group">
             <label for="color">Color</label>
             <div class="color-picker">
                 <input type="color" id="color" name="color" 
-                       value="{{ calendar.color.unwrap_or_else(|| "#3B82F6".to_string()) }}">
+                       value="{% match calendar.color %}{% when Some with (c) %}{{ c }}{% when None %}#3B82F6{% endmatch %}">
             </div>
         </div>
         

@@ -34,7 +34,7 @@ async fn authenticate_basic_auth(
 async fn get_user_id(
     service: &CalendarService,
     user_id_ext: Option<Uuid>,
-    basic_auth: Option<&BasicAuthCredentials>,
+    basic_auth: Option<BasicAuthCredentials>,
 ) -> Result<Uuid, AppError> {
     // First try JWT auth (user_id from extension)
     if let Some(user_id) = user_id_ext {
@@ -43,7 +43,7 @@ async fn get_user_id(
     
     // Then try Basic Auth
     if let Some(credentials) = basic_auth {
-        return authenticate_basic_auth(service, credentials).await;
+        return authenticate_basic_auth(service, &credentials).await;
     }
     
     Err(AppError::AuthenticationError("Authentication required".to_string()))
@@ -252,11 +252,11 @@ pub async fn caldav_discovery() -> impl IntoResponse {
 /// Handle CalDAV PROPFIND requests
 pub async fn caldav_propfind(
     State(service): State<CalendarService>,
-    Extension(user_id_ext): Option<Extension<Uuid>>,
-    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
+    user_id_ext: Option<Extension<Uuid>>,
+    basic_auth: Option<Extension<BasicAuthCredentials>>,
     _uri: Uri,
 ) -> Result<Response, AppError> {
-    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.map(|ext| ext.0)).await?;
     let calendars = service.get_calendars_by_user_id(user_id).await?;
     
     let mut responses = String::new();
@@ -302,13 +302,14 @@ pub async fn caldav_propfind(
 }
 
 /// Handle CalDAV REPORT requests for calendar queries
+#[allow(dead_code)]
 pub async fn caldav_report(
     State(service): State<CalendarService>,
-    Extension(user_id_ext): Option<Extension<Uuid>>,
-    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
+    user_id_ext: Option<Extension<Uuid>>,
+    basic_auth: Option<Extension<BasicAuthCredentials>>,
     _body: String,
 ) -> Result<Response, AppError> {
-    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.map(|ext| ext.0)).await?;
     let calendars = service.get_calendars_by_user_id(user_id).await?;
     
     let mut responses = String::new();
@@ -356,11 +357,11 @@ pub async fn caldav_report(
 /// Handle CalDAV GET requests for calendar data
 pub async fn caldav_get(
     State(service): State<CalendarService>,
-    Extension(user_id_ext): Option<Extension<Uuid>>,
-    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
+    user_id_ext: Option<Extension<Uuid>>,
+    basic_auth: Option<Extension<BasicAuthCredentials>>,
     uri: Uri,
 ) -> Result<Response, AppError> {
-    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.map(|ext| ext.0)).await?;
     let path = uri.path();
     
     // Parse path like /calendars/{calendar_id}/ or /calendars/{calendar_id}/{event_id}.ics
@@ -432,14 +433,15 @@ pub async fn caldav_get(
 }
 
 /// Handle CalDAV PUT requests to create/update events
+#[allow(dead_code)]
 pub async fn caldav_put(
     State(service): State<CalendarService>,
-    Extension(user_id_ext): Option<Extension<Uuid>>,
-    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
+    user_id_ext: Option<Extension<Uuid>>,
+    basic_auth: Option<Extension<BasicAuthCredentials>>,
     uri: Uri,
     body: String,
 ) -> Result<Response, AppError> {
-    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.map(|ext| ext.0)).await?;
     let path = uri.path();
     
     // Parse path like /calendars/{calendar_id}/{event_id}.ics
@@ -471,13 +473,14 @@ pub async fn caldav_put(
 }
 
 /// Handle CalDAV DELETE requests
+#[allow(dead_code)]
 pub async fn caldav_delete(
     State(service): State<CalendarService>,
-    Extension(user_id_ext): Option<Extension<Uuid>>,
-    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
+    user_id_ext: Option<Extension<Uuid>>,
+    basic_auth: Option<Extension<BasicAuthCredentials>>,
     uri: Uri,
 ) -> Result<Response, AppError> {
-    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.map(|ext| ext.0)).await?;
     let path = uri.path();
     
     // Parse path like /calendars/{calendar_id}/{event_id}.ics
@@ -513,12 +516,12 @@ pub async fn caldav_delete(
 /// Handle CalDAV MKCOL requests to create new calendars
 pub async fn caldav_mkcol(
     State(service): State<CalendarService>,
-    Extension(user_id_ext): Option<Extension<Uuid>>,
-    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
+    user_id_ext: Option<Extension<Uuid>>,
+    basic_auth: Option<Extension<BasicAuthCredentials>>,
     uri: Uri,
     body: String,
 ) -> Result<Response, AppError> {
-    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.map(|ext| ext.0)).await?;
     let path = uri.path();
     
     // Parse path like /calendars/{calendar_name}/
@@ -573,6 +576,7 @@ fn parse_calendar_name_from_mkcol(body: &str) -> Option<String> {
 }
 
 /// Parse iCalendar VEVENT data into NewEvent
+#[allow(dead_code)]
 fn parse_icalendar(data: &str) -> Result<NewEvent, AppError> {
     let mut title = None;
     let mut description = None;
@@ -614,6 +618,7 @@ fn parse_icalendar(data: &str) -> Result<NewEvent, AppError> {
 }
 
 /// Parse iCalendar datetime format
+#[allow(dead_code)]
 fn parse_ical_datetime(date_str: &str) -> Result<chrono::DateTime<chrono::Utc>, AppError> {
     // Handle both DATE and DATE-TIME formats
     let date_str = date_str.trim();
@@ -637,6 +642,7 @@ fn parse_ical_datetime(date_str: &str) -> Result<chrono::DateTime<chrono::Utc>, 
 }
 
 /// Escape XML special characters
+#[allow(dead_code)]
 fn escape_xml(s: &str) -> String {
     s.replace('&', "&amp;")
      .replace('<', "&lt;")

@@ -7,6 +7,7 @@ use crate::models::{Calendar, Event, Share, User};
 
 /// User info for templates
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct UserInfo {
     pub id: Uuid,
     pub name: String,
@@ -25,6 +26,7 @@ impl From<&User> for UserInfo {
 
 /// Calendar info for templates
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CalendarInfo {
     pub id: Uuid,
     pub name: String,
@@ -47,6 +49,7 @@ impl From<&Calendar> for CalendarInfo {
 
 /// Event info for templates
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct EventInfo {
     pub id: Uuid,
     pub title: String,
@@ -219,6 +222,12 @@ pub struct EventsTemplate {
     pub selected_calendar: Option<Uuid>,
 }
 
+impl EventsTemplate {
+    pub fn is_calendar_selected(&self, calendar_id: &Uuid) -> bool {
+        self.selected_calendar.map_or(false, |id| &id == calendar_id)
+    }
+}
+
 /// Event form template (for create/edit)
 #[derive(Template)]
 #[template(path = "event_form.html")]
@@ -231,4 +240,10 @@ pub struct EventFormTemplate {
     pub event: EventFormData,
     pub calendars: Vec<CalendarInfo>,
     pub selected_calendar_id: Option<Uuid>,
+}
+
+impl EventFormTemplate {
+    pub fn is_calendar_selected(&self, calendar_id: &Uuid) -> bool {
+        self.selected_calendar_id.map_or(false, |id| &id == calendar_id)
+    }
 }

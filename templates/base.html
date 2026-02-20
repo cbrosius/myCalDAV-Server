@@ -29,7 +29,7 @@
     <main class="container">
         {% match flash_message %}
             {% when Some with (msg) %}
-                <div class="flash-message flash-{{ flash_type.unwrap_or_default() }}">
+                <div class="flash-message flash-{% match flash_type %}{% when Some with (t) %}{{ t }}{% when None %}{% endmatch %}">
                     {{ msg }}
                 </div>
             {% when None %}

@@ -6,12 +6,12 @@ use axum::{
     Extension,
 };
 use jsonwebtoken::{decode, DecodingKey, Validation};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::info;
 use uuid::Uuid;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Claims {
     pub sub: String,  // Subject (user id)
     pub exp: usize,   // Expiration time
@@ -76,7 +76,7 @@ pub async fn auth_middleware(
 ) -> Response {
     // Skip authentication for certain routes
     let path = req.uri().path();
-    let is_public_route = path.starts_with("/public") 
+    let _is_public_route = path.starts_with("/public") 
         || path.starts_with("/health")
         || path.starts_with("/api/auth/login")
         || path.starts_with("/api/auth/register")

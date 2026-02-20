@@ -29,7 +29,7 @@
                     {% when None %}
                 {% endmatch %}
                 <div class="calendar-meta">
-                    <span>{{ event_counts.get(calendar.id).unwrap_or(&0) }} events</span>
+                    <span>{% match event_counts.get(calendar.id) %}{% when Some with (c) %}{{ c }}{% when None %}0{% endmatch %} events</span>
                     {% if calendar.is_public %}
                         <span class="badge badge-public">Public</span>
                     {% else %}

@@ -11,10 +11,10 @@
 <div class="filters">
     <div class="filter-group">
         <label for="calendar-filter">Filter by Calendar:</label>
-        <select id="calendar-filter" onchange="filterByCalendar(this.value)">
+            <select id="calendar-filter" onchange="filterByCalendar(this.value)">
             <option value="">All Calendars</option>
             {% for cal in calendars %}
-            <option value="{{ cal.id }}" {% if selected_calendar == Some(cal.id) %}selected{% endif %}>
+            <option value="{{ cal.id }}" {% if self.is_calendar_selected(cal.id) %}selected{% endif %}>
                 {{ cal.name }}
             </option>
             {% endfor %}
@@ -34,16 +34,16 @@
         {% for event in events %}
         <div class="event-item" data-calendar="{{ event.calendar_id }}">
             <div class="event-date">
-                <span class="event-day">{{ event.start_time | date(format="%d") }}</span>
-                <span class="event-month">{{ event.start_time | date(format="%b") }}</span>
+                <span class="event-day">{{ event.start_time.format("%d") }}</span>
+                <span class="event-month">{{ event.start_time.format("%b") }}</span>
             </div>
             <div class="event-info">
                 <h4>
                     <a href="/web/events/{{ event.id }}/edit">{{ event.title }}</a>
                 </h4>
                 <p class="event-time">
-                    {{ event.start_time | date(format="%Y-%m-%d %H:%M") }} - 
-                    {{ event.end_time | date(format="%H:%M") }}
+                    {{ event.start_time.format("%Y-%m-%d %H:%M") }} - 
+                    {{ event.end_time.format("%H:%M") }}
                 </p>
                 {% match event.location %}
                     {% when Some with (loc) %}
@@ -51,7 +51,7 @@
                     {% when None %}
                 {% endmatch %}
                 <p class="event-calendar">
-                    📅 {{ calendar_names.get(event.calendar_id).unwrap_or(&"Unknown".to_string()) }}
+                    📅 {% match calendar_names.get(event.calendar_id) %}{% when Some with (n) %}{{ n }}{% when None %}Unknown{% endmatch %}
                 </p>
             </div>
             <div class="event-actions">
