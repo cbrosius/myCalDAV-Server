@@ -9,6 +9,7 @@ use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::Deserialize;
 use tracing::info;
 use uuid::Uuid;
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Claims {
@@ -28,6 +29,42 @@ impl AuthConfig {
     }
 }
 
+/// Result of parsing Basic Auth credentials
+#[derive(Debug, Clone)]
+pub struct BasicAuthCredentials {
+    pub email: String,
+    pub password: String,
+}
+
+/// Parse Basic Auth header into credentials
+fn parse_basic_auth(header_value: &str) -> Option<BasicAuthCredentials> {
+    if !header_value.starts_with("Basic ") {
+        return None;
+    }
+    
+    let encoded = &header_value["Basic ".len()..];
+    let decoded = BASE64_STANDARD.decode(encoded).ok()?;
+    let decoded_str = String::from_utf8(decoded).ok()?;
+    
+    let parts: Vec<&str> = decoded_str.splitn(2, ':').collect();
+    if parts.len() != 2 {
+        return None;
+    }
+    
+    Some(BasicAuthCredentials {
+        email: parts[0].to_string(),
+        password: parts[1].to_string(),
+    })
+}
+
+/// Check if the path is a CalDAV endpoint that should support Basic Auth
+fn is_caldav_endpoint(path: &str) -> bool {
+    path.starts_with("/calendars") 
+        || path == "/.well-known/caldav"
+        || path.starts_with("/dav")
+        || path.starts_with("/principals")
+}
+
 pub async fn auth_middleware(
     Extension(auth_config): Extension<AuthConfig>,
     mut req: Request,
@@ -45,51 +82,69 @@ pub async fn auth_middleware(
         return next.run(req).await;
     }
     
-    // Extract token from Authorization header
-    let token = match req.headers().get(header::AUTHORIZATION) {
-        Some(header) => {
-            let header_str = header.to_str().unwrap_or_default();
-            if header_str.starts_with("Bearer ") {
-                Some(header_str["Bearer ".len()..].to_string())
-            } else {
-                None
-            }
-        }
-        None => None,
-    };
-
-    match token {
-        Some(token) => {
-            let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
-            
-            match decode::<Claims>(
-                &token,
-                &DecodingKey::from_secret(auth_config.jwt_secret.as_bytes()),
-                &validation
-            ) {
-                Ok(decoded) => {
-                    // Parse user_id from claims
-                    let user_id = match Uuid::parse_str(&decoded.claims.sub) {
-                        Ok(id) => id,
-                        Err(_) => {
-                            return (StatusCode::UNAUTHORIZED, "Invalid user ID in token").into_response();
-                        }
-                    };
-                    
-                    // Add user_id to request extensions
-                    req.extensions_mut().insert(user_id);
-                    next.run(req).await
-                }
-                Err(e) => {
-                    info!("Token validation failed: {}", e);
-                    (StatusCode::UNAUTHORIZED, "Invalid token").into_response()
-                }
-            }
-        }
+    // Extract Authorization header
+    let auth_header = match req.headers().get(header::AUTHORIZATION) {
+        Some(header) => header.to_str().unwrap_or_default().to_string(),
         None => {
-            (StatusCode::UNAUTHORIZED, "Missing token").into_response()
+            // For CalDAV endpoints, return 401 with WWW-Authenticate header
+            if is_caldav_endpoint(path) {
+                return Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .header("WWW-Authenticate", "Basic realm=\"CalDAV Server\"")
+                    .body(axum::body::Body::from("Authentication required"))
+                    .unwrap();
+            }
+            return (StatusCode::UNAUTHORIZED, "Missing token").into_response();
+        }
+    };
+    
+    // Try Bearer token first (for API endpoints)
+    if auth_header.starts_with("Bearer ") {
+        let token = auth_header["Bearer ".len()..].to_string();
+        let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
+        
+        match decode::<Claims>(
+            &token,
+            &DecodingKey::from_secret(auth_config.jwt_secret.as_bytes()),
+            &validation
+        ) {
+            Ok(decoded) => {
+                // Parse user_id from claims
+                let user_id = match Uuid::parse_str(&decoded.claims.sub) {
+                    Ok(id) => id,
+                    Err(_) => {
+                        return (StatusCode::UNAUTHORIZED, "Invalid user ID in token").into_response();
+                    }
+                };
+                
+                // Add user_id to request extensions
+                req.extensions_mut().insert(user_id);
+                return next.run(req).await;
+            }
+            Err(e) => {
+                info!("Token validation failed: {}", e);
+                return (StatusCode::UNAUTHORIZED, "Invalid token").into_response();
+            }
         }
     }
+    
+    // Try Basic Auth (primarily for CalDAV endpoints)
+    if let Some(credentials) = parse_basic_auth(&auth_header) {
+        // Store credentials in request extensions for handlers to use
+        req.extensions_mut().insert(credentials);
+        return next.run(req).await;
+    }
+    
+    // No valid authentication method found
+    if is_caldav_endpoint(path) {
+        return Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .header("WWW-Authenticate", "Basic realm=\"CalDAV Server\"")
+            .body(axum::body::Body::from("Authentication required"))
+            .unwrap();
+    }
+    
+    (StatusCode::UNAUTHORIZED, "Invalid authentication method").into_response()
 }
 
 /// Middleware to add CORS headers to responses

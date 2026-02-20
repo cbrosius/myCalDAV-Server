@@ -6,7 +6,7 @@
 - [x] Set up project structure (src/, docs/, plans/, etc.)
 - [x] Create basic Cargo.toml with dependencies
 - [x] Set up Git repository and initial commit
-- [ ] Create .gitignore for Rust/Docker
+- [x] Create .gitignore for Rust/Docker
 - [x] Set up Docker configuration (Dockerfile, docker-compose.yml)
 
 ## Phase 2: Database & Data Models
@@ -34,9 +34,9 @@
 - [x] Implement CalDAV GET for calendar/event data
 - [x] Implement CalDAV PUT for creating/updating events
 - [x] Implement CalDAV DELETE for removing events
-- [ ] Add CalDAV authentication (Basic Auth support)
+- [x] Add CalDAV authentication (Basic Auth support)
 - [ ] Test CalDAV compatibility with DAVx5 and iOS
-- [ ] Add MKCOL support for creating calendars via CalDAV
+- [x] Add MKCOL support for creating calendars via CalDAV
 
 ## Phase 5: Web GUI Development
 - [ ] Design frontend architecture (SPA with React/Vue or server-rendered)
@@ -89,10 +89,10 @@
 - [ ] Prepare for initial release
 
 ## Progress Tracking
-- [x] Phase 1: Project Foundation & Setup - 80%
+- [x] Phase 1: Project Foundation & Setup - 100%
 - [x] Phase 2: Database & Data Models - 100%
 - [x] Phase 3: Core Backend API - 90%
-- [-] Phase 4: CalDAV Server Integration - 70%
+- [x] Phase 4: CalDAV Server Integration - 90%
 - [ ] Phase 5: Web GUI Development - 0%
 - [-] Phase 6: Security & Authentication - 40%
 - [ ] Phase 7: Advanced Features - 10%
@@ -103,8 +103,10 @@
 ## Notes
 - Core CalDAV server functionality is implemented
 - Authentication with JWT is working
+- Basic Auth support for CalDAV clients (DAVx5, iOS) has been added
+- MKCOL support for creating calendars via CalDAV has been added
 - CRUD operations for users, calendars, events, and shares are complete
-- Next steps: Add CalDAV Basic Auth support, test with real clients
+- Next steps: Test with real CalDAV clients (DAVx5, iOS)
 - Consider adding Web GUI for easier management
 
 ## Current Implementation Status

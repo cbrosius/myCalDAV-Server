@@ -9,8 +9,44 @@ use uuid::Uuid;
 use crate::models::*;
 use crate::services::CalendarService;
 use crate::error::AppError;
+use crate::middleware::BasicAuthCredentials;
+use bcrypt::verify;
 
 pub mod auth;
+
+/// Helper function to authenticate Basic Auth credentials and get user_id
+async fn authenticate_basic_auth(
+    service: &CalendarService,
+    credentials: &BasicAuthCredentials,
+) -> Result<Uuid, AppError> {
+    let user = service.get_user_by_email(&credentials.email).await?
+        .ok_or(AppError::AuthenticationError("Invalid credentials".to_string()))?;
+    
+    if !verify(&credentials.password, &user.password_hash)? {
+        return Err(AppError::AuthenticationError("Invalid credentials".to_string()));
+    }
+    
+    Ok(user.id)
+}
+
+/// Helper to get user_id from either Extension (JWT auth) or Basic Auth
+async fn get_user_id(
+    service: &CalendarService,
+    user_id_ext: Option<Uuid>,
+    basic_auth: Option<&BasicAuthCredentials>,
+) -> Result<Uuid, AppError> {
+    // First try JWT auth (user_id from extension)
+    if let Some(user_id) = user_id_ext {
+        return Ok(user_id);
+    }
+    
+    // Then try Basic Auth
+    if let Some(credentials) = basic_auth {
+        return authenticate_basic_auth(service, credentials).await;
+    }
+    
+    Err(AppError::AuthenticationError("Authentication required".to_string()))
+}
 
 // Root endpoint
 pub async fn root() -> impl IntoResponse {
@@ -215,9 +251,11 @@ pub async fn caldav_discovery() -> impl IntoResponse {
 /// Handle CalDAV PROPFIND requests
 pub async fn caldav_propfind(
     State(service): State<CalendarService>,
-    Extension(user_id): Extension<Uuid>,
+    Extension(user_id_ext): Option<Extension<Uuid>>,
+    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
     _uri: Uri,
 ) -> Result<Response, AppError> {
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
     let calendars = service.get_calendars_by_user_id(user_id).await?;
     
     let mut responses = String::new();
@@ -265,9 +303,11 @@ pub async fn caldav_propfind(
 /// Handle CalDAV REPORT requests for calendar queries
 pub async fn caldav_report(
     State(service): State<CalendarService>,
-    Extension(user_id): Extension<Uuid>,
+    Extension(user_id_ext): Option<Extension<Uuid>>,
+    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
     _body: String,
 ) -> Result<Response, AppError> {
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
     let calendars = service.get_calendars_by_user_id(user_id).await?;
     
     let mut responses = String::new();
@@ -315,9 +355,13 @@ pub async fn caldav_report(
 /// Handle CalDAV GET requests for calendar data
 pub async fn caldav_get(
     State(service): State<CalendarService>,
-    user_id: Uuid,
-    path: &str,
+    Extension(user_id_ext): Option<Extension<Uuid>>,
+    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
+    uri: Uri,
 ) -> Result<Response, AppError> {
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
+    let path = uri.path();
+    
     // Parse path like /calendars/{calendar_id}/ or /calendars/{calendar_id}/{event_id}.ics
     let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     
@@ -389,10 +433,14 @@ pub async fn caldav_get(
 /// Handle CalDAV PUT requests to create/update events
 pub async fn caldav_put(
     State(service): State<CalendarService>,
-    user_id: Uuid,
-    path: &str,
+    Extension(user_id_ext): Option<Extension<Uuid>>,
+    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
+    uri: Uri,
     body: String,
 ) -> Result<Response, AppError> {
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
+    let path = uri.path();
+    
     // Parse path like /calendars/{calendar_id}/{event_id}.ics
     let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     
@@ -424,9 +472,13 @@ pub async fn caldav_put(
 /// Handle CalDAV DELETE requests
 pub async fn caldav_delete(
     State(service): State<CalendarService>,
-    user_id: Uuid,
-    path: &str,
+    Extension(user_id_ext): Option<Extension<Uuid>>,
+    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
+    uri: Uri,
 ) -> Result<Response, AppError> {
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
+    let path = uri.path();
+    
     // Parse path like /calendars/{calendar_id}/{event_id}.ics
     let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     
@@ -455,6 +507,68 @@ pub async fn caldav_delete(
         .status(StatusCode::NO_CONTENT)
         .body(Body::from(""))
         .unwrap())
+}
+
+/// Handle CalDAV MKCOL requests to create new calendars
+pub async fn caldav_mkcol(
+    State(service): State<CalendarService>,
+    Extension(user_id_ext): Option<Extension<Uuid>>,
+    Extension(basic_auth): Option<Extension<BasicAuthCredentials>>,
+    uri: Uri,
+    body: String,
+) -> Result<Response, AppError> {
+    let user_id = get_user_id(&service, user_id_ext.map(|ext| ext.0), basic_auth.as_ref().map(|ext| ext.0.as_ref())).await?;
+    let path = uri.path();
+    
+    // Parse path like /calendars/{calendar_name}/
+    let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    
+    if parts.len() < 2 {
+        return Err(AppError::ValidationError("Invalid calendar path".to_string()));
+    }
+    
+    // Extract calendar name from path or request body
+    let calendar_name = if parts[1].is_empty() {
+        // Try to parse name from XML body
+        parse_calendar_name_from_mkcol(&body).unwrap_or_else(|| "New Calendar".to_string())
+    } else {
+        parts[1].to_string()
+    };
+    
+    // Create the calendar
+    let new_calendar = NewCalendar {
+        name: calendar_name,
+        description: None,
+        color: Some("#3B82F6".to_string()), // Default blue color
+        is_public: false,
+    };
+    
+    let calendar = service.create_calendar(user_id, new_calendar).await?;
+    
+    Ok(Response::builder()
+        .status(StatusCode::CREATED)
+        .header(header::LOCATION, format!("/calendars/{}/", calendar.id))
+        .body(Body::from(""))
+        .unwrap())
+}
+
+/// Parse calendar name from MKCOL request body
+fn parse_calendar_name_from_mkcol(body: &str) -> Option<String> {
+    // Try to extract display name from XML body
+    // Example: <d:prop><d:displayname>My Calendar</d:displayname></d:prop>
+    if let Some(start) = body.find("<d:displayname>") {
+        let start = start + "<d:displayname>".len();
+        if let Some(end) = body[start..].find("</d:displayname>") {
+            return Some(body[start..start + end].to_string());
+        }
+    }
+    if let Some(start) = body.find("<displayname>") {
+        let start = start + "<displayname>".len();
+        if let Some(end) = body[start..].find("</displayname>") {
+            return Some(body[start..start + end].to_string());
+        }
+    }
+    None
 }
 
 /// Parse iCalendar VEVENT data into NewEvent

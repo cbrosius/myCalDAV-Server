@@ -1,5 +1,5 @@
 use axum::{
-    routing::{get, post, put, delete},
+    routing::{get, post, put, delete, any},
     Router,
     middleware::from_fn,
     Extension,
@@ -65,6 +65,14 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         // Share routes
         .route("/api/auth/calendars/{id}/shares", get(handlers::get_calendar_shares).post(handlers::create_share))
         .route("/api/auth/shares/{id}", delete(handlers::delete_share))
+        // CalDAV routes (support both JWT and Basic Auth)
+        .route("/calendars", any(handlers::caldav_propfind))
+        .route("/calendars/", any(handlers::caldav_propfind))
+        .route("/calendars/{id}", any(handlers::caldav_get))
+        .route("/calendars/{id}/", any(handlers::caldav_get))
+        .route("/calendars/{id}/{event}", any(handlers::caldav_get))
+        // MKCOL for creating calendars via CalDAV
+        .route("/calendars/new", axum::routing::method_routing::on(axum::http::Method::from_bytes(b"MKCOL").unwrap(), handlers::caldav_mkcol))
         .with_state(service)
         .layer(TraceLayer::new_for_http())
         .layer(from_fn(middleware::cors_middleware))
