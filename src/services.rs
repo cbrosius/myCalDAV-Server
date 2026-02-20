@@ -4,6 +4,7 @@ use uuid::Uuid;
 use crate::models::*;
 use crate::error::AppError;
 use bcrypt::{hash, DEFAULT_COST};
+use jsonwebtoken::{encode, Header, EncodingKey};
 
 #[derive(Clone)]
 pub struct CalendarService {
@@ -23,11 +24,25 @@ impl CalendarService {
     pub fn get_jwt_secret(&self) -> String {
         self.jwt_secret.clone()
     }
+    
+    pub fn generate_jwt(&self, user_id: Uuid) -> Result<String, AppError> {
+        let claims = crate::middleware::Claims {
+            sub: user_id.to_string(),
+            exp: (Utc::now() + chrono::Duration::hours(24)).timestamp() as usize,
+            iat: Utc::now().timestamp() as usize,
+        };
+        
+        encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(self.jwt_secret.as_bytes()),
+        ).map_err(|e| AppError::InternalServerError(format!("JWT encoding error: {}", e)))
+    }
 
     // User operations
     pub async fn get_user_by_id(&self, id: Uuid) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
-            "SELECT id, email, password_hash, created_at, updated_at FROM users WHERE id = ?"
+            "SELECT id, name, email, password_hash, created_at, updated_at FROM users WHERE id = ?"
         )
         .bind(id.to_string())
         .fetch_optional(&self.pool)
@@ -38,7 +53,7 @@ impl CalendarService {
 
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
-            "SELECT id, email, password_hash, created_at, updated_at FROM users WHERE email = ?"
+            "SELECT id, name, email, password_hash, created_at, updated_at FROM users WHERE email = ?"
         )
         .bind(email)
         .fetch_optional(&self.pool)
@@ -48,18 +63,19 @@ impl CalendarService {
     }
 
     pub async fn create_user(&self, new_user: NewUser) -> Result<User, AppError> {
-        let password_hash = hash(new_user.password, DEFAULT_COST)?;
+        let password_hash = hash(&new_user.password, DEFAULT_COST)?;
         let now = Utc::now();
         let id = Uuid::new_v4();
         
         let user = sqlx::query_as::<_, User>(
             r#"
-            INSERT INTO users (id, email, password_hash, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id, email, password_hash, created_at, updated_at
+            INSERT INTO users (id, name, email, password_hash, created_at, updated_at) 
+            VALUES (?, ?, ?, ?, ?, ?)
+            RETURNING id, name, email, password_hash, created_at, updated_at
             "#
         )
         .bind(id.to_string())
+        .bind(new_user.name)
         .bind(new_user.email)
         .bind(password_hash)
         .bind(now)
@@ -336,9 +352,19 @@ impl CalendarService {
     // Share operations
     pub async fn get_shares_by_calendar_id(&self, calendar_id: Uuid) -> Result<Vec<Share>, AppError> {
         let shares = sqlx::query_as::<_, Share>(
-            "SELECT id, calendar_id, user_id, shared_with_user_id, permission_level, created_at FROM shares WHERE calendar_id = ?"
+            "SELECT id, calendar_id, user_id, shared_with_user_id, shared_with_email, permission_level, created_at FROM shares WHERE calendar_id = ?"
         )
         .bind(calendar_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(shares)
+    }
+    
+    pub async fn get_all_shares(&self) -> Result<Vec<Share>, AppError> {
+        let shares = sqlx::query_as::<_, Share>(
+            "SELECT id, calendar_id, user_id, shared_with_user_id, shared_with_email, permission_level, created_at FROM shares"
+        )
         .fetch_all(&self.pool)
         .await?;
 
@@ -348,24 +374,23 @@ impl CalendarService {
     pub async fn create_share(&self, calendar_id: Uuid, user_id: Uuid, new_share: NewShare) -> Result<Share, AppError> {
         let now = Utc::now();
         let id = Uuid::new_v4();
-        let permission_str = match new_share.permission_level {
-            PermissionLevel::Read => "read",
-            PermissionLevel::Write => "write",
-            PermissionLevel::Admin => "admin",
-        };
+        
+        // Try to find user by email
+        let shared_with_user = self.get_user_by_email(&new_share.shared_with_email).await?;
         
         let share = sqlx::query_as::<_, Share>(
             r#"
-            INSERT INTO shares (id, calendar_id, user_id, shared_with_user_id, permission_level, created_at) 
-            VALUES (?, ?, ?, ?, ?, ?)
-            RETURNING id, calendar_id, user_id, shared_with_user_id, permission_level, created_at
+            INSERT INTO shares (id, calendar_id, user_id, shared_with_user_id, shared_with_email, permission_level, created_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            RETURNING id, calendar_id, user_id, shared_with_user_id, shared_with_email, permission_level, created_at
             "#
         )
         .bind(id.to_string())
         .bind(calendar_id.to_string())
         .bind(user_id.to_string())
-        .bind(new_share.shared_with_user_id.to_string())
-        .bind(permission_str)
+        .bind(shared_with_user.as_ref().map(|u| u.id.to_string()))
+        .bind(&new_share.shared_with_email)
+        .bind(&new_share.permission)
         .bind(now)
         .fetch_one(&self.pool)
         .await?;

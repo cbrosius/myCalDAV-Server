@@ -6,6 +6,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
     pub id: Uuid,
+    pub name: String,
     pub email: String,
     pub password_hash: String,
     pub created_at: DateTime<Utc>,
@@ -43,7 +44,8 @@ pub struct Share {
     pub id: Uuid,
     pub calendar_id: Uuid,
     pub user_id: Uuid,
-    pub shared_with_user_id: Uuid,
+    pub shared_with_user_id: Option<Uuid>,
+    pub shared_with_email: Option<String>,
     pub permission_level: String,
     pub created_at: DateTime<Utc>,
 }
@@ -78,6 +80,7 @@ impl PermissionLevel {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewUser {
+    pub name: String,
     pub email: String,
     pub password: String,
 }
@@ -120,8 +123,8 @@ pub struct UpdateEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewShare {
-    pub shared_with_user_id: Uuid,
-    pub permission_level: PermissionLevel,
+    pub shared_with_email: String,
+    pub permission: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

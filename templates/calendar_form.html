@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}Edit Calendar{% else %}New Calendar{% endif %} - My CalDAV Server{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{% if is_edit %}Edit Calendar{% else %}New Calendar{% endif %}</h1>
+</div>
+
+<div class="form-container">
+    <form action="{% if is_edit %}/web/calendars/{{ calendar_id.unwrap() }}{% else %}/web/calendars/new{% endif %}" method="post">
+        <div class="form-group">
+            <label for="name">Calendar Name *</label>
+            <input type="text" id="name" name="name" required 
+                   value="{{ calendar.name.unwrap_or_default() }}"
+                   placeholder="Enter calendar name">
+        </div>
+        
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="3"
+                      placeholder="Enter calendar description (optional)">{{ calendar.description.unwrap_or_default() }}</textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="color">Color</label>
+            <div class="color-picker">
+                <input type="color" id="color" name="color" 
+                       value="{{ calendar.color.unwrap_or_else(|| "#3B82F6".to_string()) }}">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" name="is_public" {% if calendar.is_public %}checked{% endif %}>
+                <span>Make this calendar public</span>
+            </label>
+            <p class="form-hint">Public calendars can be viewed by anyone with the link.</p>
+        </div>
+        
+        <div class="form-actions">
+            <a href="/web/calendars" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{% if is_edit %}Update Calendar{% else %}Create Calendar{% endif %}</button>
+        </div>
+    </form>
+</div>
+
+{% if is_edit %}
+<div class="danger-zone">
+    <h3>Danger Zone</h3>
+    <p>Deleting a calendar will permanently remove all its events. This action cannot be undone.</p>
+    <form action="/web/calendars/{{ calendar_id.unwrap() }}/delete" method="post" 
+          onsubmit="return confirm('Are you sure you want to delete this calendar? All events will be lost.');">
+        <button type="submit" class="btn btn-danger">Delete Calendar</button>
+    </form>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Update color preview when color picker changes
+    document.getElementById('color').addEventListener('input', function(e) {
+        // Color preview logic if needed
+    });
+</script>
+{% endblock %}

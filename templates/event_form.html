@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}Edit Event{% else %}New Event{% endif %} - My CalDAV Server{% endblock %}
+
+{% block head %}
+<style>
+    .datetime-inputs {
+        display: flex;
+        gap: 0.5rem;
+    }
+    .datetime-inputs input {
+        flex: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{% if is_edit %}Edit Event{% else %}New Event{% endif %}</h1>
+</div>
+
+<div class="form-container">
+    <form action="{% if is_edit %}/web/events/{{ event_id.unwrap() }}{% else %}/web/events/new{% endif %}" method="post">
+        <div class="form-group">
+            <label for="title">Event Title *</label>
+            <input type="text" id="title" name="title" required 
+                   value="{{ event.title.unwrap_or_default() }}"
+                   placeholder="Enter event title">
+        </div>
+        
+        <div class="form-group">
+            <label for="calendar_id">Calendar *</label>
+            <select id="calendar_id" name="calendar_id" required>
+                {% for cal in calendars %}
+                <option value="{{ cal.id }}" {% if selected_calendar_id == Some(cal.id) %}selected{% endif %}>
+                    {{ cal.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="start_time">Start Time *</label>
+                <input type="datetime-local" id="start_time" name="start_time" required
+                       value="{{ event.start_time.map(|t| t.format(\"%Y-%m-%dT%H:%M\")).unwrap_or_default() }}">
+            </div>
+            <div class="form-group">
+                <label for="end_time">End Time *</label>
+                <input type="datetime-local" id="end_time" name="end_time" required
+                       value="{{ event.end_time.map(|t| t.format(\"%Y-%m-%dT%H:%M\")).unwrap_or_default() }}">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" name="is_all_day" id="is_all_day" 
+                       {% if event.is_all_day.unwrap_or(false) %}checked{% endif %}
+                       onchange="toggleAllDay(this.checked)">
+                <span>All-day event</span>
+            </label>
+        </div>
+        
+        <div class="form-group">
+            <label for="location">Location</label>
+            <input type="text" id="location" name="location" 
+                   value="{{ event.location.unwrap_or_default() }}"
+                   placeholder="Enter location (optional)">
+        </div>
+        
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="4"
+                      placeholder="Enter event description (optional)">{{ event.description.unwrap_or_default() }}</textarea>
+        </div>
+        
+        <div class="form-actions">
+            <a href="/web/dashboard" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{% if is_edit %}Update Event{% else %}Create Event{% endif %}</button>
+        </div>
+    </form>
+</div>
+
+{% if is_edit %}
+<div class="danger-zone">
+    <h3>Danger Zone</h3>
+    <p>Deleting this event cannot be undone.</p>
+    <form action="/web/events/{{ event_id.unwrap() }}/delete" method="post" 
+          onsubmit="return confirm('Are you sure you want to delete this event?');">
+        <button type="submit" class="btn btn-danger">Delete Event</button>
+    </form>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function toggleAllDay(isAllDay) {
+        const startInput = document.getElementById('start_time');
+        const endInput = document.getElementById('end_time');
+        
+        if (isAllDay) {
+            // Store current values
+            startInput.dataset.originalValue = startInput.value;
+            endInput.dataset.originalValue = endInput.value;
+            
+            // Convert to date-only inputs
+            startInput.type = 'date';
+            endInput.type = 'date';
+        } else {
+            // Restore datetime-local inputs
+            startInput.type = 'datetime-local';
+            endInput.type = 'datetime-local';
+            
+            // Restore original values if available
+            if (startInput.dataset.originalValue) {
+                startInput.value = startInput.dataset.originalValue;
+            }
+            if (endInput.dataset.originalValue) {
+                endInput.value = endInput.dataset.originalValue;
+            }
+        }
+    }
+    
+    // Initialize all-day state on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        const allDayCheckbox = document.getElementById('is_all_day');
+        if (allDayCheckbox.checked) {
+            toggleAllDay(true);
+        }
+    });
+</script>
+{% endblock %}

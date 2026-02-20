@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}{{ calendar.name }} - My CalDAV Server{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="calendar-header">
+        <div class="calendar-title">
+            <h1>{{ calendar.name }}</h1>
+        </div>
+        <div class="page-actions">
+            <a href="/web/calendars/{{ calendar.id }}/edit" class="btn btn-outline">Edit Calendar</a>
+            <a href="/web/events/new?calendar={{ calendar.id }}" class="btn btn-primary">+ New Event</a>
+        </div>
+    </div>
+    {% match calendar.description %}
+        {% when Some with (desc) %}
+            <p class="calendar-description">{{ desc }}</p>
+        {% when None %}
+    {% endmatch %}
+</div>
+
+<div class="calendar-info-bar">
+    <div class="info-item">
+        <span class="info-label">Status:</span>
+        {% if calendar.is_public %}
+            <span class="badge badge-public">Public</span>
+        {% else %}
+            <span class="badge badge-private">Private</span>
+        {% endif %}
+    </div>
+    <div class="info-item">
+        <span class="info-label">Events:</span>
+        <span class="info-value">{{ events.len() }}</span>
+    </div>
+    <div class="info-item">
+        <span class="info-label">Shares:</span>
+        <span class="info-value">{{ shares.len() }}</span>
+    </div>
+</div>
+
+<div class="tabs">
+    <button class="tab-btn active" data-tab="events">Events</button>
+    <button class="tab-btn" data-tab="shares">Shares</button>
+    <button class="tab-btn" data-tab="settings">Settings</button>
+</div>
+
+<div class="tab-content active" id="events-tab">
+    {% if events.is_empty() %}
+        <div class="empty-state">
+            <div class="empty-icon">📌</div>
+            <h2>No events yet</h2>
+            <p>This calendar doesn't have any events.</p>
+            <a href="/web/events/new?calendar={{ calendar.id }}" class="btn btn-primary">Create Event</a>
+        </div>
+    {% else %}
+        <div class="event-list">
+            {% for event in events %}
+            <div class="event-item">
+                <div class="event-date">
+                    <span class="event-day">{{ event.start_time | date(format="%d") }}</span>
+                    <span class="event-month">{{ event.start_time | date(format="%b") }}</span>
+                </div>
+                <div class="event-info">
+                    <h4>
+                        <a href="/web/events/{{ event.id }}">{{ event.title }}</a>
+                    </h4>
+                    <p class="event-time">
+                        {{ event.start_time | date(format="%Y-%m-%d %H:%M") }} - 
+                        {{ event.end_time | date(format="%H:%M") }}
+                    </p>
+                    {% match event.location %}
+                        {% when Some with (loc) %}
+                            <p class="event-location">📍 {{ loc }}</p>
+                        {% when None %}
+                    {% endmatch %}
+                </div>
+                <div class="event-actions">
+                    <a href="/web/events/{{ event.id }}/edit" class="btn btn-sm btn-outline">Edit</a>
+                    <form action="/web/events/{{ event.id }}/delete" method="post" class="inline-form">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+
+<div class="tab-content" id="shares-tab">
+    <div class="section-header">
+        <h3>Calendar Shares</h3>
+        <button class="btn btn-primary" onclick="showShareModal()">+ Add Share</button>
+    </div>
+    
+    {% if shares.is_empty() %}
+        <div class="empty-state">
+            <p>This calendar is not shared with anyone.</p>
+        </div>
+    {% else %}
+        <div class="share-list">
+            {% for share in shares %}
+            <div class="share-item">
+                <div class="share-info">
+                    <span class="share-email">{{ share.shared_with_email.unwrap_or_default() }}</span>
+                    <span class="share-permission badge">{{ share.permission }}</span>
+                </div>
+                <form action="/web/shares/{{ share.id }}/delete" method="post" class="inline-form">
+                    <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    
+    <!-- Share Modal -->
+    <div id="share-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Share Calendar</h3>
+                <button class="modal-close" onclick="hideShareModal()">&times;</button>
+            </div>
+            <form action="/web/calendars/{{ calendar.id }}/shares" method="post">
+                <div class="form-group">
+                    <label for="shared_with_email">Email Address</label>
+                    <input type="email" id="shared_with_email" name="shared_with_email" required 
+                           placeholder="Enter email address">
+                </div>
+                <div class="form-group">
+                    <label for="permission">Permission</label>
+                    <select id="permission" name="permission">
+                        <option value="read">Read Only</option>
+                        <option value="write">Read & Write</option>
+                        <option value="admin">Full Access</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="hideShareModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Share</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="tab-content" id="settings-tab">
+    <div class="settings-section">
+        <h3>CalDAV Access</h3>
+        <p>Use these settings to access this calendar from your CalDAV client:</p>
+        <div class="config-item">
+            <label>Calendar URL:</label>
+            <code>{{ caldav_url }}/calendars/{{ calendar.id }}/</code>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(btn.dataset.tab + '-tab').classList.add('active');
+        });
+    });
+    
+    // Modal functions
+    function showShareModal() {
+        document.getElementById('share-modal').classList.add('show');
+    }
+    
+    function hideShareModal() {
+        document.getElementById('share-modal').classList.remove('show');
+    }
+    
+    // Close modal on outside click
+    document.getElementById('share-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'share-modal') {
+            hideShareModal();
+        }
+    });
+</script>
+{% endblock %}

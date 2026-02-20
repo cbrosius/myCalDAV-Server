@@ -8,6 +8,7 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tracing::info;
 use tower_http::trace::TraceLayer;
+use tower_http::services::ServeDir;
 
 mod config;
 mod error;
@@ -17,6 +18,7 @@ mod services;
 mod middleware;
 mod state;
 mod database;
+mod templates;
 
 pub use crate::config::Config;
 pub use crate::error::AppError;
@@ -73,6 +75,28 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .route("/calendars/{id}/{event}", any(handlers::caldav_get))
         // MKCOL for creating calendars via CalDAV
         .route("/calendars/new", axum::routing::method_routing::on(axum::http::Method::from_bytes(b"MKCOL").unwrap(), handlers::caldav_mkcol))
+        // Web UI routes - Authentication
+        .route("/web/login", get(handlers::web::login_page).post(handlers::web::login_handler))
+        .route("/web/register", get(handlers::web::register_page).post(handlers::web::register_handler))
+        .route("/web/logout", get(handlers::web::logout_handler))
+        // Web UI routes - Dashboard
+        .route("/web/dashboard", get(handlers::web::dashboard_page))
+        // Web UI routes - Calendars
+        .route("/web/calendars", get(handlers::web::calendars_page))
+        .route("/web/calendars/new", get(handlers::web::new_calendar_page).post(handlers::web::create_calendar_handler))
+        .route("/web/calendars/{id}", get(handlers::web::calendar_detail_page))
+        .route("/web/calendars/{id}/edit", get(handlers::web::edit_calendar_page).post(handlers::web::update_calendar_handler))
+        .route("/web/calendars/{id}/delete", post(handlers::web::delete_calendar_handler))
+        // Web UI routes - Events
+        .route("/web/events", get(handlers::web::events_page))
+        .route("/web/events/new", get(handlers::web::new_event_page).post(handlers::web::create_event_handler))
+        .route("/web/events/{id}/edit", get(handlers::web::edit_event_page).post(handlers::web::update_event_handler))
+        .route("/web/events/{id}/delete", post(handlers::web::delete_event_handler))
+        // Web UI routes - Shares
+        .route("/web/calendars/{id}/shares", post(handlers::web::create_share_handler))
+        .route("/web/shares/{id}/delete", post(handlers::web::delete_share_handler))
+        // Static files
+        .nest_service("/static", ServeDir::new("static"))
         .with_state(service)
         .layer(TraceLayer::new_for_http())
         .layer(from_fn(middleware::cors_middleware))

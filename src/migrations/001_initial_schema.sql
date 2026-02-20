@@ -1,6 +1,7 @@
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     created_at TEXT NOT NULL,
@@ -40,12 +41,12 @@ CREATE TABLE IF NOT EXISTS shares (
     id TEXT PRIMARY KEY,
     calendar_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
-    shared_with_user_id TEXT NOT NULL,
+    shared_with_user_id TEXT,
+    shared_with_email TEXT,
     permission_level TEXT NOT NULL,
     created_at TEXT NOT NULL,
     FOREIGN KEY (calendar_id) REFERENCES calendars (id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-    FOREIGN KEY (shared_with_user_id) REFERENCES users (id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
 -- Create indexes for better performance

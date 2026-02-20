@@ -29,6 +29,10 @@ impl AuthConfig {
     }
 }
 
+/// Wrapper for optional user ID from authentication
+#[derive(Debug, Clone)]
+pub struct OptionalUser(pub Option<Uuid>);
+
 /// Result of parsing Basic Auth credentials
 #[derive(Debug, Clone)]
 pub struct BasicAuthCredentials {
@@ -72,35 +76,44 @@ pub async fn auth_middleware(
 ) -> Response {
     // Skip authentication for certain routes
     let path = req.uri().path();
-    let auth_required = !path.starts_with("/public") 
-        && !path.starts_with("/health")
-        && !path.starts_with("/api/auth/login")
-        && !path.starts_with("/api/auth/register")
-        && path != "/";
+    let is_public_route = path.starts_with("/public") 
+        || path.starts_with("/health")
+        || path.starts_with("/api/auth/login")
+        || path.starts_with("/api/auth/register")
+        || path.starts_with("/web/login")
+        || path.starts_with("/web/register")
+        || path.starts_with("/static")
+        || path == "/";
     
-    if !auth_required {
-        return next.run(req).await;
-    }
+    // Check if this is a web route that requires authentication
+    let is_web_route = path.starts_with("/web/") && !path.starts_with("/web/login") && !path.starts_with("/web/register");
     
-    // Extract Authorization header
-    let auth_header = match req.headers().get(header::AUTHORIZATION) {
-        Some(header) => header.to_str().unwrap_or_default().to_string(),
-        None => {
-            // For CalDAV endpoints, return 401 with WWW-Authenticate header
-            if is_caldav_endpoint(path) {
-                return Response::builder()
-                    .status(StatusCode::UNAUTHORIZED)
-                    .header("WWW-Authenticate", "Basic realm=\"CalDAV Server\"")
-                    .body(axum::body::Body::from("Authentication required"))
-                    .unwrap();
-            }
-            return (StatusCode::UNAUTHORIZED, "Missing token").into_response();
+    // Check if this is an API route that requires authentication
+    let is_api_route = path.starts_with("/api/auth/") && !path.starts_with("/api/auth/login") && !path.starts_with("/api/auth/register");
+    
+    // Check if this is a CalDAV route
+    let is_caldav = is_caldav_endpoint(path);
+    
+    let auth_required = is_web_route || is_api_route || is_caldav;
+    
+    // Try to get token from Authorization header or Cookie
+    let token = if let Some(auth_header) = req.headers().get(header::AUTHORIZATION) {
+        let auth_str = auth_header.to_str().unwrap_or_default();
+        if auth_str.starts_with("Bearer ") {
+            Some(auth_str["Bearer ".len()..].to_string())
+        } else {
+            None
         }
+    } else if let Some(cookie_header) = req.headers().get(header::COOKIE) {
+        // Parse cookie for auth_token
+        let cookie_str = cookie_header.to_str().unwrap_or_default();
+        parse_auth_cookie(cookie_str)
+    } else {
+        None
     };
     
-    // Try Bearer token first (for API endpoints)
-    if auth_header.starts_with("Bearer ") {
-        let token = auth_header["Bearer ".len()..].to_string();
+    // Try to authenticate with token
+    if let Some(token) = token {
         let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
         
         match decode::<Claims>(
@@ -110,33 +123,39 @@ pub async fn auth_middleware(
         ) {
             Ok(decoded) => {
                 // Parse user_id from claims
-                let user_id = match Uuid::parse_str(&decoded.claims.sub) {
-                    Ok(id) => id,
-                    Err(_) => {
-                        return (StatusCode::UNAUTHORIZED, "Invalid user ID in token").into_response();
-                    }
-                };
-                
-                // Add user_id to request extensions
-                req.extensions_mut().insert(user_id);
-                return next.run(req).await;
+                if let Ok(user_id) = Uuid::parse_str(&decoded.claims.sub) {
+                    // Add user_id to request extensions
+                    req.extensions_mut().insert(user_id);
+                    req.extensions_mut().insert(OptionalUser(Some(user_id)));
+                    return next.run(req).await;
+                }
             }
             Err(e) => {
                 info!("Token validation failed: {}", e);
-                return (StatusCode::UNAUTHORIZED, "Invalid token").into_response();
             }
         }
     }
     
     // Try Basic Auth (primarily for CalDAV endpoints)
-    if let Some(credentials) = parse_basic_auth(&auth_header) {
-        // Store credentials in request extensions for handlers to use
-        req.extensions_mut().insert(credentials);
+    if let Some(auth_header) = req.headers().get(header::AUTHORIZATION) {
+        if let Some(credentials) = parse_basic_auth(auth_header.to_str().unwrap_or_default()) {
+            // Store credentials in request extensions for handlers to use
+            req.extensions_mut().insert(credentials);
+            req.extensions_mut().insert(OptionalUser(None));
+            return next.run(req).await;
+        }
+    }
+    
+    // Add OptionalUser(None) for unauthenticated requests
+    req.extensions_mut().insert(OptionalUser(None));
+    
+    // Handle unauthenticated requests
+    if !auth_required {
         return next.run(req).await;
     }
     
-    // No valid authentication method found
-    if is_caldav_endpoint(path) {
+    // For CalDAV endpoints, return 401 with WWW-Authenticate header
+    if is_caldav {
         return Response::builder()
             .status(StatusCode::UNAUTHORIZED)
             .header("WWW-Authenticate", "Basic realm=\"CalDAV Server\"")
@@ -144,7 +163,28 @@ pub async fn auth_middleware(
             .unwrap();
     }
     
-    (StatusCode::UNAUTHORIZED, "Invalid authentication method").into_response()
+    // For web routes, redirect to login
+    if is_web_route {
+        return Response::builder()
+            .status(StatusCode::FOUND)
+            .header("Location", "/web/login")
+            .body(axum::body::Body::empty())
+            .unwrap();
+    }
+    
+    // For API routes, return 401
+    (StatusCode::UNAUTHORIZED, "Authentication required").into_response()
+}
+
+/// Parse auth_token from cookie string
+fn parse_auth_cookie(cookie_str: &str) -> Option<String> {
+    for cookie in cookie_str.split(';') {
+        let cookie = cookie.trim();
+        if cookie.starts_with("auth_token=") {
+            return Some(cookie["auth_token=".len()..].to_string());
+        }
+    }
+    None
 }
 
 /// Middleware to add CORS headers to responses

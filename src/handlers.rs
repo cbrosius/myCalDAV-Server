@@ -13,6 +13,7 @@ use crate::middleware::BasicAuthCredentials;
 use bcrypt::verify;
 
 pub mod auth;
+pub mod web;
 
 /// Helper function to authenticate Basic Auth credentials and get user_id
 async fn authenticate_basic_auth(
