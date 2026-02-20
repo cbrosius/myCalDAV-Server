@@ -101,19 +101,38 @@ pub async fn login_handler(
     State(service): State<CalendarService>,
     Form(form): Form<LoginForm>,
 ) -> Result<Response, AppError> {
-    let user = service.get_user_by_email(&form.email).await?
-        .ok_or_else(|| AppError::AuthenticationError("Invalid credentials".to_string()))?;
+    tracing::info!("Login attempt for email: {}", form.email);
+    
+    let user = match service.get_user_by_email(&form.email).await? {
+        Some(u) => u,
+        None => {
+            tracing::warn!("User not found: {}", form.email);
+            return Ok(Redirect::to("/web/login?message=Invalid credentials&flash_type=error").into_response());
+        }
+    };
+    
+    tracing::info!("User found: {}", user.email);
     
     // Verify password
-    let valid = bcrypt::verify(&form.password, &user.password_hash)
-        .map_err(|_| AppError::AuthenticationError("Invalid credentials".to_string()))?;
+    let valid = match bcrypt::verify(&form.password, &user.password_hash) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("Password verification error: {:?}", e);
+            return Ok(Redirect::to("/web/login?message=Invalid credentials&flash_type=error").into_response());
+        }
+    };
     
     if !valid {
+        tracing::warn!("Invalid password for user: {}", form.email);
         return Ok(Redirect::to("/web/login?message=Invalid credentials&flash_type=error").into_response());
     }
     
+    tracing::info!("Password verified for user: {}", form.email);
+    
     // Generate JWT token
     let token = service.generate_jwt(user.id)?;
+    
+    tracing::info!("JWT generated, redirecting to dashboard");
     
     // Set cookie and redirect
     Ok(Response::builder()

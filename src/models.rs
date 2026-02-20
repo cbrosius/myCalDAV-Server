@@ -1,9 +1,20 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
+use sqlx::{FromRow, Row};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+// Helper to parse UUID from string
+fn parse_uuid(s: &str) -> Result<Uuid, uuid::Error> {
+    Uuid::parse_str(s)
+}
+
+// Helper to convert UUID to string for database storage
+#[allow(dead_code)]
+fn uuid_to_string(id: Uuid) -> String {
+    id.to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: Uuid,
     pub name: String,
@@ -13,7 +24,26 @@ pub struct User {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+impl FromRow<'_, sqlx::sqlite::SqliteRow> for User {
+    fn from_row(row: &'_ sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+        let id_str: String = row.try_get("id")?;
+        let id = parse_uuid(&id_str).map_err(|e| sqlx::Error::ColumnDecode {
+            index: "id".to_string(),
+            source: Box::new(e),
+        })?;
+        
+        Ok(User {
+            id,
+            name: row.try_get("name")?,
+            email: row.try_get("email")?,
+            password_hash: row.try_get("password_hash")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Calendar {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -25,7 +55,34 @@ pub struct Calendar {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+impl FromRow<'_, sqlx::sqlite::SqliteRow> for Calendar {
+    fn from_row(row: &'_ sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+        let id_str: String = row.try_get("id")?;
+        let id = parse_uuid(&id_str).map_err(|e| sqlx::Error::ColumnDecode {
+            index: "id".to_string(),
+            source: Box::new(e),
+        })?;
+        
+        let user_id_str: String = row.try_get("user_id")?;
+        let user_id = parse_uuid(&user_id_str).map_err(|e| sqlx::Error::ColumnDecode {
+            index: "user_id".to_string(),
+            source: Box::new(e),
+        })?;
+        
+        Ok(Calendar {
+            id,
+            user_id,
+            name: row.try_get("name")?,
+            description: row.try_get("description")?,
+            color: row.try_get("color")?,
+            is_public: row.try_get::<i32, _>("is_public")? != 0,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub id: Uuid,
     pub calendar_id: Uuid,
@@ -39,7 +96,36 @@ pub struct Event {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+impl FromRow<'_, sqlx::sqlite::SqliteRow> for Event {
+    fn from_row(row: &'_ sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+        let id_str: String = row.try_get("id")?;
+        let id = parse_uuid(&id_str).map_err(|e| sqlx::Error::ColumnDecode {
+            index: "id".to_string(),
+            source: Box::new(e),
+        })?;
+        
+        let calendar_id_str: String = row.try_get("calendar_id")?;
+        let calendar_id = parse_uuid(&calendar_id_str).map_err(|e| sqlx::Error::ColumnDecode {
+            index: "calendar_id".to_string(),
+            source: Box::new(e),
+        })?;
+        
+        Ok(Event {
+            id,
+            calendar_id,
+            title: row.try_get("title")?,
+            description: row.try_get("description")?,
+            location: row.try_get("location")?,
+            start_time: row.try_get("start_time")?,
+            end_time: row.try_get("end_time")?,
+            is_all_day: row.try_get::<i32, _>("is_all_day")? != 0,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Share {
     pub id: Uuid,
     pub calendar_id: Uuid,
@@ -48,6 +134,48 @@ pub struct Share {
     pub shared_with_email: Option<String>,
     pub permission_level: String,
     pub created_at: DateTime<Utc>,
+}
+
+impl FromRow<'_, sqlx::sqlite::SqliteRow> for Share {
+    fn from_row(row: &'_ sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+        let id_str: String = row.try_get("id")?;
+        let id = parse_uuid(&id_str).map_err(|e| sqlx::Error::ColumnDecode {
+            index: "id".to_string(),
+            source: Box::new(e),
+        })?;
+        
+        let calendar_id_str: String = row.try_get("calendar_id")?;
+        let calendar_id = parse_uuid(&calendar_id_str).map_err(|e| sqlx::Error::ColumnDecode {
+            index: "calendar_id".to_string(),
+            source: Box::new(e),
+        })?;
+        
+        let user_id_str: String = row.try_get("user_id")?;
+        let user_id = parse_uuid(&user_id_str).map_err(|e| sqlx::Error::ColumnDecode {
+            index: "user_id".to_string(),
+            source: Box::new(e),
+        })?;
+        
+        let shared_with_user_id: Option<String> = row.try_get("shared_with_user_id")?;
+        let shared_with_user_id = shared_with_user_id
+            .as_ref()
+            .map(|s| parse_uuid(s))
+            .transpose()
+            .map_err(|e| sqlx::Error::ColumnDecode {
+                index: "shared_with_user_id".to_string(),
+                source: Box::new(e),
+            })?;
+        
+        Ok(Share {
+            id,
+            calendar_id,
+            user_id,
+            shared_with_user_id,
+            shared_with_email: row.try_get("shared_with_email")?,
+            permission_level: row.try_get("permission_level")?,
+            created_at: row.try_get("created_at")?,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

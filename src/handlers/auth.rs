@@ -49,11 +49,30 @@ pub async fn login(
     State(service): State<CalendarService>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, AppError> {
-    let user = service.get_user_by_email(&payload.email).await?.ok_or(
-        AppError::AuthenticationError("Invalid credentials".to_string()))?;
+    tracing::info!("API login attempt for email: {}", payload.email);
+    
+    let user = match service.get_user_by_email(&payload.email).await? {
+        Some(u) => u,
+        None => {
+            tracing::warn!("User not found: {}", payload.email);
+            return Err(AppError::AuthenticationError("Invalid credentials".to_string()));
+        }
+    };
+    
+    tracing::info!("User found: {}, verifying password", user.email);
 
-    if !verify(payload.password, &user.password_hash)? {
-        return Err(AppError::AuthenticationError("Invalid credentials".to_string()));
+    match verify(&payload.password, &user.password_hash) {
+        Ok(true) => {
+            tracing::info!("Password verified for user: {}", user.email);
+        }
+        Ok(false) => {
+            tracing::warn!("Invalid password for user: {}", user.email);
+            return Err(AppError::AuthenticationError("Invalid credentials".to_string()));
+        }
+        Err(e) => {
+            tracing::error!("Password verification error for user {}: {:?}", user.email, e);
+            return Err(AppError::PasswordHashError(e));
+        }
     }
 
     let now = Utc::now().timestamp() as usize;
@@ -68,6 +87,8 @@ pub async fn login(
         &claims,
         &EncodingKey::from_secret(service.get_jwt_secret().as_bytes()),
     )?;
+
+    tracing::info!("Login successful for user: {}", user.email);
 
     Ok(Json(LoginResponse { 
         token,

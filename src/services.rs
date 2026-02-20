@@ -46,18 +46,27 @@ impl CalendarService {
         )
         .bind(id.to_string())
         .fetch_optional(&self.pool)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error in get_user_by_id: {:?}", e);
+            AppError::DatabaseError(e)
+        })?;
 
         Ok(user)
     }
 
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
+        tracing::info!("Fetching user by email: {}", email);
         let user = sqlx::query_as::<_, User>(
             "SELECT id, name, email, password_hash, created_at, updated_at FROM users WHERE email = ?"
         )
         .bind(email)
         .fetch_optional(&self.pool)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error in get_user_by_email: {:?}", e);
+            AppError::DatabaseError(e)
+        })?;
 
         Ok(user)
     }
