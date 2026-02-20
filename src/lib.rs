@@ -54,25 +54,25 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/auth/login", post(handlers::auth::login))
         .route("/api/auth/register", post(handlers::auth::register))
         // User routes
-        .route("/api/users/{id}", get(handlers::get_user_by_id))
+        .route("/api/users/:id", get(handlers::get_user_by_id))
         // Calendar routes
-        .route("/api/calendars/{id}", get(handlers::get_calendar_by_id))
+        .route("/api/calendars/:id", get(handlers::get_calendar_by_id))
         .route("/api/auth/calendars", get(handlers::auth::get_user_calendars).post(handlers::auth::create_calendar))
-        .route("/api/auth/calendars/{id}", put(handlers::update_calendar).delete(handlers::delete_calendar))
-        .route("/api/auth/calendars/{id}/events", get(handlers::auth::get_events))
+        .route("/api/auth/calendars/:id", put(handlers::update_calendar).delete(handlers::delete_calendar))
+        .route("/api/auth/calendars/:id/events", get(handlers::auth::get_events))
         // Event routes
-        .route("/api/events/{id}", get(handlers::get_event_by_id))
+        .route("/api/events/:id", get(handlers::get_event_by_id))
         .route("/api/auth/events", post(handlers::auth::create_event))
-        .route("/api/auth/events/{id}", get(handlers::auth::get_event).put(handlers::update_event).delete(handlers::delete_event))
+        .route("/api/auth/events/:id", get(handlers::auth::get_event).put(handlers::update_event).delete(handlers::delete_event))
         // Share routes
-        .route("/api/auth/calendars/{id}/shares", get(handlers::get_calendar_shares).post(handlers::create_share))
-        .route("/api/auth/shares/{id}", delete(handlers::delete_share))
+        .route("/api/auth/calendars/:id/shares", get(handlers::get_calendar_shares).post(handlers::create_share))
+        .route("/api/auth/shares/:id", delete(handlers::delete_share))
         // CalDAV routes (support both JWT and Basic Auth)
         .route("/calendars", any(handlers::caldav_propfind))
         .route("/calendars/", any(handlers::caldav_propfind))
-        .route("/calendars/{id}", any(handlers::caldav_get))
-        .route("/calendars/{id}/", any(handlers::caldav_get))
-        .route("/calendars/{id}/{event}", any(handlers::caldav_get))
+        .route("/calendars/:id", any(handlers::caldav_get))
+        .route("/calendars/:id/", any(handlers::caldav_get))
+        .route("/calendars/:id/:event", any(handlers::caldav_get))
         // MKCOL for creating calendars via CalDAV
         .route("/calendars/new", any(handlers::caldav_mkcol))
         // Web UI routes - Authentication
@@ -84,17 +84,17 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         // Web UI routes - Calendars
         .route("/web/calendars", get(handlers::web::calendars_page))
         .route("/web/calendars/new", get(handlers::web::new_calendar_page).post(handlers::web::create_calendar_handler))
-        .route("/web/calendars/{id}", get(handlers::web::calendar_detail_page))
-        .route("/web/calendars/{id}/edit", get(handlers::web::edit_calendar_page).post(handlers::web::update_calendar_handler))
-        .route("/web/calendars/{id}/delete", post(handlers::web::delete_calendar_handler))
+        .route("/web/calendars/:id", get(handlers::web::calendar_detail_page))
+        .route("/web/calendars/:id/edit", get(handlers::web::edit_calendar_page).post(handlers::web::update_calendar_handler))
+        .route("/web/calendars/:id/delete", post(handlers::web::delete_calendar_handler))
         // Web UI routes - Events
         .route("/web/events", get(handlers::web::events_page))
         .route("/web/events/new", get(handlers::web::new_event_page).post(handlers::web::create_event_handler))
-        .route("/web/events/{id}/edit", get(handlers::web::edit_event_page).post(handlers::web::update_event_handler))
-        .route("/web/events/{id}/delete", post(handlers::web::delete_event_handler))
+        .route("/web/events/:id/edit", get(handlers::web::edit_event_page).post(handlers::web::update_event_handler))
+        .route("/web/events/:id/delete", post(handlers::web::delete_event_handler))
         // Web UI routes - Shares
-        .route("/web/calendars/{id}/shares", post(handlers::web::create_share_handler))
-        .route("/web/shares/{id}/delete", post(handlers::web::delete_share_handler))
+        .route("/web/calendars/:id/shares", post(handlers::web::create_share_handler))
+        .route("/web/shares/:id/delete", post(handlers::web::delete_share_handler))
         // Static files
         .nest_service("/static", ServeDir::new("static"))
         .with_state(service)
