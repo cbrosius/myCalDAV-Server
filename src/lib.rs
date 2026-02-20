@@ -1,0 +1,83 @@
+use axum::{
+    routing::{get, post, put, delete},
+    Router,
+    middleware::from_fn,
+    Extension,
+};
+use std::net::SocketAddr;
+use tokio::net::TcpListener;
+use tracing::info;
+use tower_http::trace::TraceLayer;
+
+mod config;
+mod error;
+mod handlers;
+mod models;
+mod services;
+mod middleware;
+mod state;
+mod database;
+
+pub use crate::config::Config;
+pub use crate::error::AppError;
+pub use crate::services::CalendarService;
+
+pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize tracing
+    tracing_subscriber::fmt::init();
+
+    // Load configuration
+    let config = Config::from_env().unwrap_or_default();
+    
+    // Ensure data directory exists
+    std::fs::create_dir_all("./data")?;
+    
+    // Create database connection pool
+    let pool = sqlx::sqlite::SqlitePool::connect(&config.database_url).await?;
+    
+    // Initialize database
+    database::initialize_database(&pool).await?;
+    
+    info!("Database initialized successfully");
+    
+    let service = services::CalendarService::new(pool);
+    let auth_config = middleware::AuthConfig::new(config.jwt_secret.clone());
+    
+    // Build the application with routes
+    let app = Router::new()
+        // Public routes (no authentication required)
+        .route("/", get(handlers::root))
+        .route("/health", get(handlers::health))
+        .route("/.well-known/caldav", get(handlers::caldav_discovery))
+        .route("/api/auth/login", post(handlers::auth::login))
+        .route("/api/auth/register", post(handlers::auth::register))
+        // User routes
+        .route("/api/users/{id}", get(handlers::get_user_by_id))
+        // Calendar routes
+        .route("/api/calendars/{id}", get(handlers::get_calendar_by_id))
+        .route("/api/auth/calendars", get(handlers::auth::get_user_calendars).post(handlers::auth::create_calendar))
+        .route("/api/auth/calendars/{id}", put(handlers::update_calendar).delete(handlers::delete_calendar))
+        .route("/api/auth/calendars/{id}/events", get(handlers::auth::get_events))
+        // Event routes
+        .route("/api/events/{id}", get(handlers::get_event_by_id))
+        .route("/api/auth/events", post(handlers::auth::create_event))
+        .route("/api/auth/events/{id}", get(handlers::auth::get_event).put(handlers::update_event).delete(handlers::delete_event))
+        // Share routes
+        .route("/api/auth/calendars/{id}/shares", get(handlers::get_calendar_shares).post(handlers::create_share))
+        .route("/api/auth/shares/{id}", delete(handlers::delete_share))
+        .with_state(service)
+        .layer(TraceLayer::new_for_http())
+        .layer(from_fn(middleware::cors_middleware))
+        .layer(from_fn(middleware::logging_middleware))
+        .layer(from_fn(middleware::auth_middleware))
+        .layer(Extension(auth_config));
+
+    // Run server
+    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+    info!("Listening on {}", addr);
+    
+    let listener = TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}

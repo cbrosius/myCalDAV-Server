@@ -1,0 +1,30 @@
+{
+  "name": "Rust Development",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "rust-dev",
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "ms-vscode.vscode-json",
+        "ms-azuretools.vscode-docker",
+        "tamasfe.even-better-toml",
+        "serayuzgur.crates"
+      ]
+    }
+  },
+  "forwardPorts": [8080, 3000],
+  "portsAttributes": {
+    "8080": {
+      "label": "API Server",
+      "onAutoForward": "openBrowser"
+    },
+    "3000": {
+      "label": "Web GUI",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "postCreateCommand": "cargo build",
+  "remoteUser": "root"
+}
