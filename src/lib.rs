@@ -18,7 +18,7 @@ mod services;
 mod middleware;
 mod state;
 mod database;
-mod templates;
+mod ui;
 
 pub use crate::config::Config;
 pub use crate::error::AppError;
@@ -75,7 +75,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .route("/calendars/:id/:event", any(handlers::caldav_get))
         // MKCOL for creating calendars via CalDAV
         .route("/calendars/new", any(handlers::caldav_mkcol))
-        // Web UI routes - Authentication
+        // Web UI routes - Authentication (form-based for SSR)
         .route("/web/login", get(handlers::web::login_page).post(handlers::web::login_handler))
         .route("/web/register", get(handlers::web::register_page).post(handlers::web::register_handler))
         .route("/web/logout", get(handlers::web::logout_handler))

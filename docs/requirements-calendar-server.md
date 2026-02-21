@@ -216,7 +216,7 @@ The API should serve both backend/frontend and external clients (e.g., mobile ap
 ## 8. Backend Architecture (Conceptual)
 
 - **Web Framework:**  
-  - Rust web framework such as **Axum** or **Tide** for HTTP API and web GUI hosting.  
+  - Rust web framework Dioxus  
 
 - **Database:**  
   - SQLite or PostgreSQL with Rust bindings (e.g., `sqlx` or `diesel`).  

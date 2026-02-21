@@ -14,7 +14,7 @@ fn uuid_to_string(id: Uuid) -> String {
     id.to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct User {
     pub id: Uuid,
     pub name: String,
@@ -43,7 +43,7 @@ impl FromRow<'_, sqlx::sqlite::SqliteRow> for User {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Calendar {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -82,7 +82,7 @@ impl FromRow<'_, sqlx::sqlite::SqliteRow> for Calendar {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Event {
     pub id: Uuid,
     pub calendar_id: Uuid,
@@ -125,7 +125,7 @@ impl FromRow<'_, sqlx::sqlite::SqliteRow> for Event {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Share {
     pub id: Uuid,
     pub calendar_id: Uuid,

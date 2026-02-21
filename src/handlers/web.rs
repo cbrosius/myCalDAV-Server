@@ -3,17 +3,17 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
 };
-use askama::Template;
 use serde::Deserialize;
 use std::collections::HashMap;
 use uuid::Uuid;
 use chrono::{Duration, Utc};
+use dioxus::prelude::*;
 
 use crate::services::CalendarService;
 use crate::error::AppError;
 use crate::models::{NewCalendar, NewEvent, NewShare, NewUser, UpdateCalendar, UpdateEvent};
-use crate::templates::*;
 use crate::middleware::OptionalUser;
+use crate::ui::*;
 
 /// Query parameters for flash messages
 #[derive(Debug, Deserialize)]
@@ -73,6 +73,11 @@ pub struct ShareFormInput {
     pub permission: String,
 }
 
+// Helper function to render Dioxus component to HTML using dioxus_ssr
+fn render_to_html(element: Element) -> Result<String, AppError> {
+    Ok(dioxus_ssr::render_element(element))
+}
+
 // ============== Login/Register Pages ==============
 
 /// Show login page
@@ -82,18 +87,19 @@ pub async fn login_page(
 ) -> Result<Html<String>, AppError> {
     // If already logged in, redirect to dashboard
     if user.0.is_some() {
-        return Ok(Html(format!("<script>window.location.href='/web/dashboard';</script>")));
+        return Ok(Html("<script>window.location.href='/web/dashboard';</script>".to_string()));
     }
     
-    let template = LoginTemplate {
-        current_user: None,
-        flash_message: query.message,
-        flash_type: query.flash_type,
-    };
+    let html = render_to_html(
+        rsx! {
+            LoginPage { 
+                flash_message: query.message,
+                flash_type: query.flash_type
+            }
+        }
+    )?;
     
-    Ok(Html(template.render().map_err(|e| {
-        AppError::InternalServerError(format!("Template error: {}", e))
-    })?))
+    Ok(Html(html))
 }
 
 /// Handle login form submission
@@ -151,18 +157,19 @@ pub async fn register_page(
 ) -> Result<Html<String>, AppError> {
     // If already logged in, redirect to dashboard
     if user.0.is_some() {
-        return Ok(Html(format!("<script>window.location.href='/web/dashboard';</script>")));
+        return Ok(Html("<script>window.location.href='/web/dashboard';</script>".to_string()));
     }
     
-    let template = RegisterTemplate {
-        current_user: None,
-        flash_message: query.message,
-        flash_type: query.flash_type,
-    };
+    let html = render_to_html(
+        rsx! {
+            RegisterPage { 
+                flash_message: query.message,
+                flash_type: query.flash_type
+            }
+        }
+    )?;
     
-    Ok(Html(template.render().map_err(|e| {
-        AppError::InternalServerError(format!("Template error: {}", e))
-    })?))
+    Ok(Html(html))
 }
 
 /// Handle register form submission
@@ -232,21 +239,19 @@ pub async fn dashboard_page(
     
     // Get all events and count
     let mut all_events = Vec::new();
-    let mut event_counts = HashMap::new();
     for cal in &calendars {
         let events = service.get_events_by_calendar_id(cal.id).await?;
-        event_counts.insert(cal.id, events.len());
         all_events.extend(events);
     }
     
     // Get upcoming events (next 7 days)
     let now = Utc::now();
     let week_later = now + Duration::days(7);
-    let upcoming_events: Vec<EventInfo> = all_events
+    let upcoming_events: Vec<_> = all_events
         .iter()
         .filter(|e| e.start_time >= now && e.start_time <= week_later)
         .take(10)
-        .map(EventInfo::from)
+        .cloned()
         .collect();
     
     let event_count = all_events.len();
@@ -258,23 +263,21 @@ pub async fn dashboard_page(
         share_count += shares.len();
     }
     
-    let template = DashboardTemplate {
-        current_user: Some(UserInfo::from(&user_model)),
-        flash_message: None,
-        flash_type: None,
-        user_name: user_model.name,
-        user_email: user_model.email,
-        calendar_count,
-        event_count,
-        share_count,
-        calendars: calendars.iter().map(CalendarInfo::from).collect(),
-        upcoming_events,
-        caldav_url: "/".to_string(),
-    };
+    let html = render_to_html(
+        rsx! {
+            DashboardPage {
+                current_user: user_model,
+                calendar_count: calendar_count,
+                event_count: event_count,
+                share_count: share_count,
+                calendars: calendars,
+                upcoming_events: upcoming_events,
+                caldav_url: "/".to_string(),
+            }
+        }
+    )?;
     
-    Ok(Html(template.render().map_err(|e| {
-        AppError::InternalServerError(format!("Template error: {}", e))
-    })?))
+    Ok(Html(html))
 }
 
 // ============== Calendar Pages ==============
@@ -296,17 +299,17 @@ pub async fn calendars_page(
         event_counts.insert(cal.id, events.len());
     }
     
-    let template = CalendarsTemplate {
-        current_user: Some(UserInfo::from(&user_model)),
-        flash_message: None,
-        flash_type: None,
-        calendars: calendars.iter().map(CalendarInfo::from).collect(),
-        event_counts,
-    };
+    let html = render_to_html(
+        rsx! {
+            CalendarsPage {
+                current_user: user_model,
+                calendars: calendars,
+                event_counts: event_counts,
+            }
+        }
+    )?;
     
-    Ok(Html(template.render().map_err(|e| {
-        AppError::InternalServerError(format!("Template error: {}", e))
-    })?))
+    Ok(Html(html))
 }
 
 /// Show new calendar form
@@ -317,18 +320,18 @@ pub async fn new_calendar_page(
     let user_model = service.get_user_by_id(user).await?
         .ok_or_else(|| AppError::AuthenticationError("User not found".to_string()))?;
     
-    let template = CalendarFormTemplate {
-        current_user: Some(UserInfo::from(&user_model)),
-        flash_message: None,
-        flash_type: None,
-        is_edit: false,
-        calendar_id: None,
-        calendar: CalendarFormData::default(),
-    };
+    let html = render_to_html(
+        rsx! {
+            CalendarFormPage {
+                current_user: user_model,
+                is_edit: false,
+                calendar_id: None,
+                calendar: None,
+            }
+        }
+    )?;
     
-    Ok(Html(template.render().map_err(|e| {
-        AppError::InternalServerError(format!("Template error: {}", e))
-    })?))
+    Ok(Html(html))
 }
 
 /// Handle new calendar form submission
@@ -354,6 +357,7 @@ pub async fn calendar_detail_page(
     State(service): State<CalendarService>,
     Extension(user): Extension<Uuid>,
     Path(calendar_id): Path<Uuid>,
+    Query(query): Query<FlashQuery>,
 ) -> Result<Html<String>, AppError> {
     let user_model = service.get_user_by_id(user).await?
         .ok_or_else(|| AppError::AuthenticationError("User not found".to_string()))?;
@@ -369,19 +373,21 @@ pub async fn calendar_detail_page(
     let events = service.get_events_by_calendar_id(calendar_id).await?;
     let shares = service.get_shares_by_calendar_id(calendar_id).await?;
     
-    let template = CalendarDetailTemplate {
-        current_user: Some(UserInfo::from(&user_model)),
-        flash_message: None,
-        flash_type: None,
-        calendar: CalendarInfo::from(&calendar),
-        events: events.iter().map(EventInfo::from).collect(),
-        shares: shares.iter().map(ShareInfo::from).collect(),
-        caldav_url: "/".to_string(),
-    };
+    let html = render_to_html(
+        rsx! {
+            CalendarDetailPage {
+                current_user: user_model,
+                calendar: calendar,
+                events: events,
+                shares: shares,
+                caldav_url: "/".to_string(),
+                flash_message: query.message,
+                flash_type: query.flash_type,
+            }
+        }
+    )?;
     
-    Ok(Html(template.render().map_err(|e| {
-        AppError::InternalServerError(format!("Template error: {}", e))
-    })?))
+    Ok(Html(html))
 }
 
 /// Show edit calendar form
@@ -401,18 +407,18 @@ pub async fn edit_calendar_page(
         return Err(AppError::AuthenticationError("Access denied".to_string()));
     }
     
-    let template = CalendarFormTemplate {
-        current_user: Some(UserInfo::from(&user_model)),
-        flash_message: None,
-        flash_type: None,
-        is_edit: true,
-        calendar_id: Some(calendar_id),
-        calendar: CalendarFormData::from(&calendar),
-    };
+    let html = render_to_html(
+        rsx! {
+            CalendarFormPage {
+                current_user: user_model,
+                is_edit: true,
+                calendar_id: Some(calendar_id),
+                calendar: Some(calendar),
+            }
+        }
+    )?;
     
-    Ok(Html(template.render().map_err(|e| {
-        AppError::InternalServerError(format!("Template error: {}", e))
-    })?))
+    Ok(Html(html))
 }
 
 /// Handle edit calendar form submission
@@ -486,29 +492,29 @@ pub async fn events_page(
     }
     
     // Filter by calendar if specified
-    let filtered_events: Vec<EventInfo> = if let Some(cal_id) = query.calendar {
+    let filtered_events: Vec<_> = if let Some(cal_id) = query.calendar {
         all_events
             .iter()
             .filter(|e| e.calendar_id == cal_id)
-            .map(EventInfo::from)
+            .cloned()
             .collect()
     } else {
-        all_events.iter().map(EventInfo::from).collect()
+        all_events
     };
     
-    let template = EventsTemplate {
-        current_user: Some(UserInfo::from(&user_model)),
-        flash_message: None,
-        flash_type: None,
-        events: filtered_events,
-        calendars: calendars.iter().map(CalendarInfo::from).collect(),
-        calendar_names,
-        selected_calendar: query.calendar,
-    };
+    let html = render_to_html(
+        rsx! {
+            EventsPage {
+                current_user: user_model,
+                events: filtered_events,
+                calendars: calendars,
+                calendar_names: calendar_names,
+                selected_calendar: query.calendar,
+            }
+        }
+    )?;
     
-    Ok(Html(template.render().map_err(|e| {
-        AppError::InternalServerError(format!("Template error: {}", e))
-    })?))
+    Ok(Html(html))
 }
 
 /// Show new event form
@@ -522,20 +528,20 @@ pub async fn new_event_page(
     
     let calendars = service.get_calendars_by_user_id(user).await?;
     
-    let template = EventFormTemplate {
-        current_user: Some(UserInfo::from(&user_model)),
-        flash_message: None,
-        flash_type: None,
-        is_edit: false,
-        event_id: None,
-        event: EventFormData::default(),
-        calendars: calendars.iter().map(CalendarInfo::from).collect(),
-        selected_calendar_id: query.calendar,
-    };
+    let html = render_to_html(
+        rsx! {
+            EventFormPage {
+                current_user: user_model,
+                is_edit: false,
+                event_id: None,
+                event: None,
+                calendars: calendars,
+                selected_calendar_id: query.calendar,
+            }
+        }
+    )?;
     
-    Ok(Html(template.render().map_err(|e| {
-        AppError::InternalServerError(format!("Template error: {}", e))
-    })?))
+    Ok(Html(html))
 }
 
 /// Handle new event form submission
@@ -596,21 +602,22 @@ pub async fn edit_event_page(
     }
     
     let calendars = service.get_calendars_by_user_id(user).await?;
+    let selected_calendar_id = event.calendar_id;
     
-    let template = EventFormTemplate {
-        current_user: Some(UserInfo::from(&user_model)),
-        flash_message: None,
-        flash_type: None,
-        is_edit: true,
-        event_id: Some(event_id),
-        event: EventFormData::from(&event),
-        calendars: calendars.iter().map(CalendarInfo::from).collect(),
-        selected_calendar_id: Some(event.calendar_id),
-    };
+    let html = render_to_html(
+        rsx! {
+            EventFormPage {
+                current_user: user_model,
+                is_edit: true,
+                event_id: Some(event_id),
+                event: Some(event),
+                calendars: calendars,
+                selected_calendar_id: Some(selected_calendar_id),
+            }
+        }
+    )?;
     
-    Ok(Html(template.render().map_err(|e| {
-        AppError::InternalServerError(format!("Template error: {}", e))
-    })?))
+    Ok(Html(html))
 }
 
 /// Handle edit event form submission
