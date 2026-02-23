@@ -63,6 +63,7 @@ pub fn AuthLayout(children: Element) -> Element {
 }
 
 // Helper function to wrap content in full HTML document
+#[allow(dead_code)]
 pub fn wrap_html(content: &str) -> String {
     format!(r#"<!DOCTYPE html>
 <html lang="en">

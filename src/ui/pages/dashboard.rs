@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use std::collections::HashMap;
 
 use crate::models::{User, Calendar, Event};
 use crate::ui::layouts::BaseLayout;

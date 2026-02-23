@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use chrono::{DateTime, Utc};
 
 use crate::models::Event;
 
