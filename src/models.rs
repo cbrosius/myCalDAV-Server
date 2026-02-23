@@ -14,12 +14,42 @@ fn uuid_to_string(id: Uuid) -> String {
     id.to_string()
 }
 
+/// User role for role-based access control
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum UserRole {
+    #[default]
+    User,
+    Admin,
+}
+
+impl UserRole {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            UserRole::User => "user",
+            UserRole::Admin => "admin",
+        }
+    }
+    
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "admin" => UserRole::Admin,
+            _ => UserRole::User,
+        }
+    }
+    
+    pub fn is_admin(&self) -> bool {
+        matches!(self, UserRole::Admin)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct User {
     pub id: Uuid,
     pub name: String,
     pub email: String,
     pub password_hash: String,
+    pub role: UserRole,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -32,11 +62,14 @@ impl FromRow<'_, sqlx::sqlite::SqliteRow> for User {
             source: Box::new(e),
         })?;
         
+        let role_str: String = row.try_get("role").unwrap_or_else(|_| "user".to_string());
+        
         Ok(User {
             id,
             name: row.try_get("name")?,
             email: row.try_get("email")?,
             password_hash: row.try_get("password_hash")?,
+            role: UserRole::from_str(&role_str),
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })

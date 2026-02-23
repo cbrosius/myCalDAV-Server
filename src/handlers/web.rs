@@ -136,7 +136,7 @@ pub async fn login_handler(
     tracing::info!("Password verified for user: {}", form.email);
     
     // Generate JWT token
-    let token = service.generate_jwt(user.id)?;
+    let token = service.generate_jwt(user.id, &user.role)?;
     
     tracing::info!("JWT generated, redirecting to dashboard");
     
@@ -202,7 +202,7 @@ pub async fn register_handler(
     let user = service.create_user(new_user).await?;
     
     // Generate JWT token
-    let token = service.generate_jwt(user.id)?;
+    let token = service.generate_jwt(user.id, &user.role)?;
     
     // Set cookie and redirect
     Ok(Response::builder()

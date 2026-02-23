@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State, Extension},
+    extract::{Path, State, Extension, Query},
     http::{header, StatusCode, Uri},
     response::{Html, IntoResponse, Response},
     body::Body,
@@ -11,9 +11,16 @@ use crate::services::CalendarService;
 use crate::error::AppError;
 use crate::middleware::BasicAuthCredentials;
 use bcrypt::verify;
+use serde::Deserialize;
 
 pub mod auth;
 pub mod web;
+
+/// Query parameters for event search
+#[derive(Debug, Deserialize)]
+pub struct SearchQuery {
+    pub q: String,
+}
 
 /// Helper function to authenticate Basic Auth credentials and get user_id
 async fn authenticate_basic_auth(
@@ -649,4 +656,78 @@ fn escape_xml(s: &str) -> String {
      .replace('>', "&gt;")
      .replace('"', "&quot;")
      .replace('\'', "&apos;")
+}
+
+// Public API endpoints (no authentication required)
+
+/// Get all public calendars
+pub async fn get_public_calendars(
+    State(service): State<CalendarService>,
+) -> Result<Json<Vec<Calendar>>, AppError> {
+    let calendars = service.get_public_calendars().await?;
+    Ok(Json(calendars))
+}
+
+/// Get a public calendar by ID (only if public)
+pub async fn get_public_calendar_by_id(
+    State(service): State<CalendarService>,
+    Path(calendar_id): Path<Uuid>,
+) -> Result<Json<Calendar>, AppError> {
+    let calendar = service.get_calendar_by_id(calendar_id).await?
+        .ok_or(AppError::NotFoundError("Calendar not found".to_string()))?;
+    
+    if !calendar.is_public {
+        return Err(AppError::AuthenticationError("This calendar is not public".to_string()));
+    }
+    
+    Ok(Json(calendar))
+}
+
+/// Export calendar as ICS file
+pub async fn export_calendar_ics(
+    State(service): State<CalendarService>,
+    Path(calendar_id): Path<Uuid>,
+) -> Result<Response, AppError> {
+    let calendar = service.get_calendar_by_id(calendar_id).await?
+        .ok_or(AppError::NotFoundError("Calendar not found".to_string()))?;
+    
+    // Allow export for public calendars or for owners
+    let ics_content = service.export_calendar_ics(calendar_id).await?;
+    
+    let filename = format!("{}.ics", calendar.name.replace(' ', "_"));
+    
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/calendar; charset=utf-8")
+        .header(header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", filename))
+        .body(Body::from(ics_content))
+        .unwrap())
+}
+
+/// Get public calendar events
+pub async fn get_public_calendar_events(
+    State(service): State<CalendarService>,
+    Path(calendar_id): Path<Uuid>,
+) -> Result<Json<Vec<Event>>, AppError> {
+    let calendar = service.get_calendar_by_id(calendar_id).await?
+        .ok_or(AppError::NotFoundError("Calendar not found".to_string()))?;
+    
+    if !calendar.is_public {
+        return Err(AppError::AuthenticationError("This calendar is not public".to_string()));
+    }
+    
+    let events = service.get_events_by_calendar_id(calendar_id).await?;
+    Ok(Json(events))
+}
+
+// Search endpoints
+
+/// Search events in user's calendars
+pub async fn search_events(
+    State(service): State<CalendarService>,
+    Extension(user_id): Extension<Uuid>,
+    Query(query): Query<SearchQuery>,
+) -> Result<Json<Vec<Event>>, AppError> {
+    let events = service.search_events(user_id, &query.q).await?;
+    Ok(Json(events))
 }

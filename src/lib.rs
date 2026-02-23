@@ -67,6 +67,18 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         // Share routes
         .route("/api/auth/calendars/:id/shares", get(handlers::get_calendar_shares).post(handlers::create_share))
         .route("/api/auth/shares/:id", delete(handlers::delete_share))
+        // Admin routes
+        .route("/api/admin/users", get(handlers::auth::admin_get_all_users).post(handlers::auth::admin_create_user))
+        .route("/api/admin/users/:id", delete(handlers::auth::admin_delete_user))
+        .route("/api/admin/users/:id/role", post(handlers::auth::admin_update_user_role))
+        // Public API routes (no authentication required)
+        .route("/api/public/calendars", get(handlers::get_public_calendars))
+        .route("/api/public/calendars/:id", get(handlers::get_public_calendar_by_id))
+        .route("/api/public/calendars/:id/events", get(handlers::get_public_calendar_events))
+        // ICS Export
+        .route("/api/calendars/:id/export", get(handlers::export_calendar_ics))
+        // Search
+        .route("/api/auth/search/events", get(handlers::search_events))
         // CalDAV routes (support both JWT and Basic Auth)
         .route("/calendars", any(handlers::caldav_propfind))
         .route("/calendars/", any(handlers::caldav_propfind))

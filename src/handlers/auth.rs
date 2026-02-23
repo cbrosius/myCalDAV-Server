@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::models::*;
 use crate::services::CalendarService;
 use crate::error::AppError;
+use crate::middleware::UserRoleExt;
 use bcrypt::verify;
 use jsonwebtoken::{encode, Header, EncodingKey};
 use chrono::Utc;
@@ -27,6 +28,8 @@ pub struct LoginResponse {
 pub struct UserResponse {
     pub id: Uuid,
     pub email: String,
+    pub name: String,
+    pub role: UserRole,
 }
 
 impl From<User> for UserResponse {
@@ -34,6 +37,8 @@ impl From<User> for UserResponse {
         Self {
             id: user.id,
             email: user.email,
+            name: user.name,
+            role: user.role,
         }
     }
 }
@@ -43,6 +48,7 @@ struct Claims {
     sub: String,   // Subject (user id)
     exp: usize,    // Expiration time
     iat: usize,    // Issued at
+    role: Option<String>,  // User role
 }
 
 pub async fn login(
@@ -80,6 +86,7 @@ pub async fn login(
         sub: user.id.to_string(),
         iat: now,
         exp: now + (24 * 60 * 60), // 24 hours
+        role: Some(user.role.as_str().to_string()),
     };
 
     let token = encode(
@@ -189,4 +196,95 @@ pub async fn get_events(
     
     let events = service.get_events_by_calendar_id(calendar_id).await?;
     Ok(Json(events))
+}
+
+// Admin-only endpoints
+
+/// Get all users (admin only)
+pub async fn admin_get_all_users(
+    State(service): State<CalendarService>,
+    Extension(_user_id): Extension<Uuid>,
+    Extension(role): Extension<UserRoleExt>,
+) -> Result<Json<Vec<UserResponse>>, AppError> {
+    if !role.is_admin() {
+        return Err(AppError::AuthenticationError("Admin access required".to_string()));
+    }
+    
+    let users = service.get_all_users().await?;
+    Ok(Json(users.into_iter().map(UserResponse::from).collect()))
+}
+
+/// Create user with specific role (admin only)
+#[derive(Debug, Deserialize)]
+pub struct AdminCreateUserRequest {
+    pub name: String,
+    pub email: String,
+    pub password: String,
+    pub role: Option<String>,
+}
+
+pub async fn admin_create_user(
+    State(service): State<CalendarService>,
+    Extension(_user_id): Extension<Uuid>,
+    Extension(role): Extension<UserRoleExt>,
+    Json(payload): Json<AdminCreateUserRequest>,
+) -> Result<Json<UserResponse>, AppError> {
+    if !role.is_admin() {
+        return Err(AppError::AuthenticationError("Admin access required".to_string()));
+    }
+    
+    // Check if user already exists
+    if service.get_user_by_email(&payload.email).await?.is_some() {
+        return Err(AppError::ValidationError("Email already registered".to_string()));
+    }
+    
+    let new_user = NewUser {
+        name: payload.name,
+        email: payload.email,
+        password: payload.password,
+    };
+    
+    let user_role = payload.role
+        .map(|r| UserRole::from_str(&r))
+        .unwrap_or_default();
+    
+    let user = service.create_user_with_role(new_user, user_role).await?;
+    Ok(Json(UserResponse::from(user)))
+}
+
+/// Update user role (admin only)
+#[derive(Debug, Deserialize)]
+pub struct AdminUpdateRoleRequest {
+    pub role: String,
+}
+
+pub async fn admin_update_user_role(
+    State(service): State<CalendarService>,
+    Extension(_user_id): Extension<Uuid>,
+    Extension(role): Extension<UserRoleExt>,
+    Path(target_user_id): Path<Uuid>,
+    Json(payload): Json<AdminUpdateRoleRequest>,
+) -> Result<Json<UserResponse>, AppError> {
+    if !role.is_admin() {
+        return Err(AppError::AuthenticationError("Admin access required".to_string()));
+    }
+    
+    let new_role = UserRole::from_str(&payload.role);
+    let user = service.update_user_role(target_user_id, new_role).await?;
+    Ok(Json(UserResponse::from(user)))
+}
+
+/// Delete user (admin only)
+pub async fn admin_delete_user(
+    State(service): State<CalendarService>,
+    Extension(_user_id): Extension<Uuid>,
+    Extension(role): Extension<UserRoleExt>,
+    Path(target_user_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if !role.is_admin() {
+        return Err(AppError::AuthenticationError("Admin access required".to_string()));
+    }
+    
+    service.delete_user(target_user_id).await?;
+    Ok(Json(serde_json::json!({ "success": true, "message": "User deleted" })))
 }

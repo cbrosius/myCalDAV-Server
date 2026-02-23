@@ -51,18 +51,18 @@
 ## Phase 6: Security & Authentication
 - [x] Implement password hashing (bcrypt)
 - [ ] Add HTTPS enforcement (reverse proxy configuration)
-- [ ] Create role-based access control (admin/user)
+- [x] Create role-based access control (admin/user)
 - [x] Implement session management (JWT)
 - [ ] Add CSRF protection
 - [ ] Create password reset functionality
 
 ## Phase 7: Advanced Features
-- [ ] Implement ICS export/import functionality
+- [x] Implement ICS export/import functionality
 - [ ] Add recurring events support (RRULE)
-- [ ] Create public calendar access
+- [x] Create public calendar access
 - [ ] Implement QR code generation API
 - [x] Add conflict resolution with ETags
-- [ ] Create search functionality for events
+- [x] Create search functionality for events
 
 ## Phase 8: Testing & Quality Assurance
 - [ ] Write unit tests for all components
@@ -94,8 +94,8 @@
 - [x] Phase 3: Core Backend API - 90%
 - [x] Phase 4: CalDAV Server Integration - 90%
 - [x] Phase 5: Web GUI Development - 85%
-- [-] Phase 6: Security & Authentication - 40%
-- [ ] Phase 7: Advanced Features - 10%
+- [-] Phase 6: Security & Authentication - 60%
+- [-] Phase 7: Advanced Features - 60%
 - [ ] Phase 8: Testing & Quality Assurance - 0%
 - [-] Phase 9: Deployment & Operations - 30%
 - [ ] Phase 10: Documentation & Polish - 0%
@@ -154,6 +154,7 @@
 | POST | /api/auth/login | Login | No |
 | GET | /api/users/{id} | Get user by ID | Yes |
 | GET | /api/calendars/{id} | Get calendar by ID | No |
+| GET | /api/calendars/{id}/export | Export calendar as ICS | No |
 | GET | /api/auth/calendars | Get user calendars | Yes |
 | POST | /api/auth/calendars | Create calendar | Yes |
 | PUT | /api/auth/calendars/{id} | Update calendar | Yes |
@@ -164,7 +165,15 @@
 | GET | /api/auth/events/{id} | Get event | Yes |
 | PUT | /api/auth/events/{id} | Update event | Yes |
 | DELETE | /api/auth/events/{id} | Delete event | Yes |
+| GET | /api/auth/events/search | Search events | Yes |
 | GET | /api/auth/calendars/{id}/shares | Get shares | Yes |
 | POST | /api/auth/calendars/{id}/shares | Create share | Yes |
 | DELETE | /api/auth/shares/{id} | Delete share | Yes |
+| GET | /api/public/calendars | Get public calendars | No |
+| GET | /api/public/calendars/{id} | Get public calendar | No |
+| GET | /api/public/calendars/{id}/events | Get public calendar events | No |
+| GET | /api/admin/users | Get all users | Admin |
+| POST | /api/admin/users | Create user with role | Admin |
+| DELETE | /api/admin/users/{id} | Delete user | Admin |
+| POST | /api/admin/users/{id}/role | Update user role | Admin |
 | GET | /.well-known/caldav | CalDAV discovery | No |

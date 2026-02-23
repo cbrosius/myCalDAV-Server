@@ -16,6 +16,7 @@ pub struct Claims {
     pub sub: String,  // Subject (user id)
     pub exp: usize,   // Expiration time
     pub iat: usize,   // Issued at
+    pub role: Option<String>,  // User role (admin/user)
 }
 
 #[derive(Clone)]
@@ -32,6 +33,16 @@ impl AuthConfig {
 /// Wrapper for optional user ID from authentication
 #[derive(Debug, Clone)]
 pub struct OptionalUser(pub Option<Uuid>);
+
+/// Wrapper for user role
+#[derive(Debug, Clone)]
+pub struct UserRoleExt(pub String);
+
+impl UserRoleExt {
+    pub fn is_admin(&self) -> bool {
+        self.0 == "admin"
+    }
+}
 
 /// Result of parsing Basic Auth credentials
 #[derive(Debug, Clone)]
@@ -124,9 +135,11 @@ pub async fn auth_middleware(
             Ok(decoded) => {
                 // Parse user_id from claims
                 if let Ok(user_id) = Uuid::parse_str(&decoded.claims.sub) {
-                    // Add user_id to request extensions
+                    // Add user_id and role to request extensions
+                    let role = decoded.claims.role.clone().unwrap_or_else(|| "user".to_string());
                     req.extensions_mut().insert(user_id);
                     req.extensions_mut().insert(OptionalUser(Some(user_id)));
+                    req.extensions_mut().insert(UserRoleExt(role));
                     return next.run(req).await;
                 }
             }

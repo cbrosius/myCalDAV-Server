@@ -6,6 +6,14 @@ use crate::error::AppError;
 use bcrypt::{hash, DEFAULT_COST};
 use jsonwebtoken::{encode, Header, EncodingKey};
 
+/// Helper function to escape iCalendar text
+fn escape_ical_text(text: &str) -> String {
+    text.replace('\\', "\\\\")
+        .replace(';', "\\;")
+        .replace(',', "\\,")
+        .replace('\n', "\\n")
+}
+
 #[derive(Clone)]
 pub struct CalendarService {
     pool: SqlitePool,
@@ -25,11 +33,12 @@ impl CalendarService {
         self.jwt_secret.clone()
     }
     
-    pub fn generate_jwt(&self, user_id: Uuid) -> Result<String, AppError> {
+    pub fn generate_jwt(&self, user_id: Uuid, role: &UserRole) -> Result<String, AppError> {
         let claims = crate::middleware::Claims {
             sub: user_id.to_string(),
             exp: (Utc::now() + chrono::Duration::hours(24)).timestamp() as usize,
             iat: Utc::now().timestamp() as usize,
+            role: Some(role.as_str().to_string()),
         };
         
         encode(
@@ -42,7 +51,7 @@ impl CalendarService {
     // User operations
     pub async fn get_user_by_id(&self, id: Uuid) -> Result<Option<User>, AppError> {
         let user = sqlx::query_as::<_, User>(
-            "SELECT id, name, email, password_hash, created_at, updated_at FROM users WHERE id = ?"
+            "SELECT id, name, email, password_hash, role, created_at, updated_at FROM users WHERE id = ?"
         )
         .bind(id.to_string())
         .fetch_optional(&self.pool)
@@ -58,7 +67,7 @@ impl CalendarService {
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, AppError> {
         tracing::info!("Fetching user by email: {}", email);
         let user = sqlx::query_as::<_, User>(
-            "SELECT id, name, email, password_hash, created_at, updated_at FROM users WHERE email = ?"
+            "SELECT id, name, email, password_hash, role, created_at, updated_at FROM users WHERE email = ?"
         )
         .bind(email)
         .fetch_optional(&self.pool)
@@ -75,14 +84,16 @@ impl CalendarService {
         let password_hash = hash(&new_user.password, DEFAULT_COST)?;
         let now = Utc::now();
         let id = Uuid::new_v4();
+        let role = UserRole::default().as_str();
         
         sqlx::query(
-            "INSERT INTO users (id, name, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+            "INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(id.to_string())
         .bind(&new_user.name)
         .bind(&new_user.email)
         .bind(&password_hash)
+        .bind(role)
         .bind(now)
         .bind(now)
         .execute(&self.pool)
@@ -93,6 +104,61 @@ impl CalendarService {
             .ok_or_else(|| AppError::InternalServerError("Failed to fetch created user".to_string()))?;
 
         Ok(user)
+    }
+    
+    /// Create a user with a specific role (admin only)
+    pub async fn create_user_with_role(&self, new_user: NewUser, role: UserRole) -> Result<User, AppError> {
+        let password_hash = hash(&new_user.password, DEFAULT_COST)?;
+        let now = Utc::now();
+        let id = Uuid::new_v4();
+        
+        sqlx::query(
+            "INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        )
+        .bind(id.to_string())
+        .bind(&new_user.name)
+        .bind(&new_user.email)
+        .bind(&password_hash)
+        .bind(role.as_str())
+        .bind(now)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        // Fetch the user back
+        let user = self.get_user_by_id(id).await?
+            .ok_or_else(|| AppError::InternalServerError("Failed to fetch created user".to_string()))?;
+
+        Ok(user)
+    }
+    
+    /// Get all users (admin only)
+    pub async fn get_all_users(&self) -> Result<Vec<User>, AppError> {
+        let users = sqlx::query_as::<_, User>(
+            "SELECT id, name, email, password_hash, role, created_at, updated_at FROM users"
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error in get_all_users: {:?}", e);
+            AppError::DatabaseError(e)
+        })?;
+
+        Ok(users)
+    }
+    
+    /// Update user role (admin only)
+    pub async fn update_user_role(&self, id: Uuid, role: UserRole) -> Result<User, AppError> {
+        let now = Utc::now();
+        
+        sqlx::query("UPDATE users SET role = ?, updated_at = ? WHERE id = ?")
+            .bind(role.as_str())
+            .bind(now)
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await?;
+        
+        self.get_user_by_id(id).await?.ok_or(AppError::NotFoundError("User not found".to_string()))
     }
 
     pub async fn update_user(&self, id: Uuid, email: Option<String>, password: Option<String>) -> Result<User, AppError> {
@@ -149,6 +215,66 @@ impl CalendarService {
         .await?;
 
         Ok(calendar)
+    }
+    
+    /// Get all public calendars
+    pub async fn get_public_calendars(&self) -> Result<Vec<Calendar>, AppError> {
+        let calendars = sqlx::query_as::<_, Calendar>(
+            "SELECT id, user_id, name, description, color, is_public, created_at, updated_at FROM calendars WHERE is_public = 1"
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(calendars)
+    }
+    
+    /// Export calendar as ICS format
+    pub async fn export_calendar_ics(&self, calendar_id: Uuid) -> Result<String, AppError> {
+        let calendar = self.get_calendar_by_id(calendar_id).await?
+            .ok_or(AppError::NotFoundError("Calendar not found".to_string()))?;
+        
+        let events = self.get_events_by_calendar_id(calendar_id).await?;
+        
+        let mut ical_content = format!(
+            "BEGIN:VCALENDAR\r\n\
+             VERSION:2.0\r\n\
+             PRODID:-//My CalDAV Server//EN\r\n\
+             CALSCALE:GREGORIAN\r\n\
+             X-WR-CALNAME:{}\r\n",
+            escape_ical_text(&calendar.name)
+        );
+        
+        for event in &events {
+            let ical_event = ICalendarEvent::from(event);
+            ical_content.push_str(&ical_event.to_ical_string());
+        }
+        
+        ical_content.push_str("END:VCALENDAR\r\n");
+        
+        Ok(ical_content)
+    }
+    
+    /// Search events by title or description
+    pub async fn search_events(&self, user_id: Uuid, query: &str) -> Result<Vec<Event>, AppError> {
+        let calendars = self.get_calendars_by_user_id(user_id).await?;
+        let mut results = Vec::new();
+        
+        for calendar in calendars {
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT id, calendar_id, title, description, location, start_time, end_time, is_all_day, created_at, updated_at 
+                 FROM events 
+                 WHERE calendar_id = ? AND (title LIKE ? OR description LIKE ?)"
+            )
+            .bind(calendar.id.to_string())
+            .bind(format!("%{}%", query))
+            .bind(format!("%{}%", query))
+            .fetch_all(&self.pool)
+            .await?;
+            
+            results.extend(events);
+        }
+        
+        Ok(results)
     }
 
     pub async fn create_calendar(&self, user_id: Uuid, new_calendar: NewCalendar) -> Result<Calendar, AppError> {
