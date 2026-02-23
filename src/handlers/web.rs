@@ -75,7 +75,11 @@ pub struct ShareFormInput {
 
 // Helper function to render Dioxus component to HTML using dioxus_ssr
 fn render_to_html(element: Element) -> Result<String, AppError> {
-    Ok(dioxus_ssr::render_element(element))
+    let content = dioxus_ssr::render_element(element);
+    Ok(format!(r#"<!DOCTYPE html>
+<html lang="en">
+{}
+</html>"#, content))
 }
 
 // ============== Login/Register Pages ==============

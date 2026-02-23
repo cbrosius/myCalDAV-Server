@@ -33,7 +33,7 @@ pub fn BaseLayout(
             }
             
             footer { class: "footer",
-                p { "© 2024 My CalDAV Server" }
+                p { "© 2026 My CalDAV Server" }
             }
         }
     }
@@ -56,17 +56,10 @@ pub fn AuthLayout(children: Element) -> Element {
             }
             
             footer { class: "footer",
-                p { "© 2024 My CalDAV Server" }
+                p { "© 2026 My CalDAV Server" }
             }
         }
     }
 }
 
-// Helper function to wrap content in full HTML document
-#[allow(dead_code)]
-pub fn wrap_html(content: &str) -> String {
-    format!(r#"<!DOCTYPE html>
-<html lang="en">
-{}
-</html>"#, content)
-}
+
