@@ -731,3 +731,68 @@ pub async fn search_events(
     let events = service.search_events(user_id, &query.q).await?;
     Ok(Json(events))
 }
+
+// QR Code generation endpoints
+
+/// Generate QR code for a calendar
+pub async fn get_calendar_qr_code(
+    State(service): State<CalendarService>,
+    Path(calendar_id): Path<Uuid>,
+) -> Result<Response, AppError> {
+    let _calendar = service.get_calendar_by_id(calendar_id).await?
+        .ok_or(AppError::NotFoundError("Calendar not found".to_string()))?;
+    
+    // Generate URL for the calendar
+    let calendar_url = format!("/api/public/calendars/{}", calendar_id);
+    
+    // Generate QR code
+    let qr_code = generate_qr_code(&calendar_url)?;
+    
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/png")
+        .body(Body::from(qr_code))
+        .unwrap())
+}
+
+/// Generate QR code for an event
+pub async fn get_event_qr_code(
+    State(service): State<CalendarService>,
+    Path(event_id): Path<Uuid>,
+) -> Result<Response, AppError> {
+    let _event = service.get_event_by_id(event_id).await?
+        .ok_or(AppError::NotFoundError("Event not found".to_string()))?;
+    
+    // Generate URL for the event
+    let event_url = format!("/api/events/{}", event_id);
+    
+    // Generate QR code
+    let qr_code = generate_qr_code(&event_url)?;
+    
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/png")
+        .body(Body::from(qr_code))
+        .unwrap())
+}
+
+/// Generate a QR code PNG image from a string
+fn generate_qr_code(data: &str) -> Result<Vec<u8>, AppError> {
+    use qrcode::QrCode;
+    use image::Luma;
+    use image::DynamicImage;
+    
+    let code = QrCode::new(data)
+        .map_err(|e| AppError::InternalServerError(format!("QR code generation error: {}", e)))?;
+    
+    // Convert to image
+    let luma_image = code.render::<Luma<u8>>().build();
+    let dynamic_image = DynamicImage::ImageLuma8(luma_image);
+    
+    // Encode as PNG
+    let mut png_data = Vec::new();
+    dynamic_image.write_to(&mut std::io::Cursor::new(&mut png_data), image::ImageFormat::Png)
+        .map_err(|e| AppError::InternalServerError(format!("PNG encoding error: {}", e)))?;
+    
+    Ok(png_data)
+}

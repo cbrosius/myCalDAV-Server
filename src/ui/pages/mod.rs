@@ -6,6 +6,7 @@ mod calendar_detail;
 mod calendar_form;
 mod events;
 mod event_form;
+mod admin;
 
 pub use login::*;
 pub use register::*;
@@ -15,3 +16,4 @@ pub use calendar_detail::*;
 pub use calendar_form::*;
 pub use events::*;
 pub use event_form::*;
+pub use admin::*;

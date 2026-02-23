@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
 use uuid::Uuid;
+use std::fmt;
 
 // Helper to parse UUID from string
 fn parse_uuid(s: &str) -> Result<Uuid, uuid::Error> {
@@ -21,6 +22,15 @@ pub enum UserRole {
     #[default]
     User,
     Admin,
+}
+
+impl fmt::Display for UserRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UserRole::User => write!(f, "User"),
+            UserRole::Admin => write!(f, "Admin"),
+        }
+    }
 }
 
 impl UserRole {

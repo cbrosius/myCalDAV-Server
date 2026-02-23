@@ -1,6 +1,7 @@
 # Calendar Server Implementation Task List
 
 ## Phase 1: Project Foundation & Setup
+
 - [x] create devcontainer for rust-development and continue inside docker container
 - [x] Initialize Rust project with Cargo
 - [x] Set up project structure (src/, docs/, plans/, etc.)
@@ -10,6 +11,7 @@
 - [x] Set up Docker configuration (Dockerfile, docker-compose.yml)
 
 ## Phase 2: Database & Data Models
+
 - [x] Design database schema for users, calendars, events, shares
 - [x] Set up SQLite database with sqlx
 - [x] Create database migrations
@@ -18,6 +20,7 @@
 - [x] Create repository layer for data access
 
 ## Phase 3: Core Backend API
+
 - [x] Set up Axum web framework
 - [x] Implement authentication middleware (JWT sessions)
 - [x] Create user management endpoints (CRUD)
@@ -28,6 +31,7 @@
 - [ ] Create OpenAPI documentation
 
 ## Phase 4: CalDAV Server Integration
+
 - [x] Implement CalDAV discovery endpoint (/.well-known/caldav)
 - [x] Implement CalDAV PROPFIND for calendar discovery
 - [x] Implement CalDAV REPORT for calendar queries
@@ -39,6 +43,7 @@
 - [x] Add MKCOL support for creating calendars via CalDAV
 
 ## Phase 5: Web GUI Development
+
 - [x] Design frontend architecture (server-rendered with Askama templates)
 - [x] Create admin web interface
 - [x] Implement user management UI
@@ -49,6 +54,7 @@
 - [x] Add responsive design and styling
 
 ## Phase 6: Security & Authentication
+
 - [x] Implement password hashing (bcrypt)
 - [ ] Add HTTPS enforcement (reverse proxy configuration)
 - [x] Create role-based access control (admin/user)
@@ -57,6 +63,7 @@
 - [ ] Create password reset functionality
 
 ## Phase 7: Advanced Features
+
 - [x] Implement ICS export/import functionality
 - [ ] Add recurring events support (RRULE)
 - [x] Create public calendar access
@@ -65,6 +72,7 @@
 - [x] Create search functionality for events
 
 ## Phase 8: Testing & Quality Assurance
+
 - [ ] Write unit tests for all components
 - [ ] Create integration tests with Docker
 - [ ] Add end-to-end tests for web GUI
@@ -73,6 +81,7 @@
 - [ ] Add performance testing
 
 ## Phase 9: Deployment & Operations
+
 - [ ] Create production configuration
 - [x] Set up logging (structured JSON logging via tracing)
 - [x] Add health check endpoints
@@ -81,6 +90,7 @@
 - [ ] Document deployment procedures
 
 ## Phase 10: Documentation & Polish
+
 - [ ] Complete API documentation
 - [ ] Create user guides and admin manual
 - [ ] Add deployment guides
@@ -89,6 +99,7 @@
 - [ ] Prepare for initial release
 
 ## Progress Tracking
+
 - [x] Phase 1: Project Foundation & Setup - 100%
 - [x] Phase 2: Database & Data Models - 100%
 - [x] Phase 3: Core Backend API - 90%
@@ -101,6 +112,7 @@
 - [ ] Phase 10: Documentation & Polish - 0%
 
 ## Notes
+
 - Core CalDAV server functionality is implemented
 - Authentication with JWT is working
 - Basic Auth support for CalDAV clients (DAVx5, iOS) has been added
@@ -112,8 +124,10 @@
 
 ## Current Implementation Status
 
-### Completed Features:
+### Completed Features
+
 1. **User Management**
+
    - User registration (`POST /api/auth/register`)
    - User login (`POST /api/auth/login`)
    - User retrieval (`GET /api/users/{id}`)
@@ -145,9 +159,10 @@
    - Event creation/update (PUT)
    - Event deletion (DELETE)
 
-### API Endpoints Summary:
+### API Endpoints Summary
+
 | Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
+| -------- | ---------- | ------------- | ------ |
 | GET | / | Root page | No |
 | GET | /health | Health check | No |
 | POST | /api/auth/register | Register new user | No |

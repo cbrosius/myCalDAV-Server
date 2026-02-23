@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use uuid::Uuid;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
+use crate::models::UserRole;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Claims {
@@ -36,11 +37,11 @@ pub struct OptionalUser(pub Option<Uuid>);
 
 /// Wrapper for user role
 #[derive(Debug, Clone)]
-pub struct UserRoleExt(pub String);
+pub struct UserRoleExt(pub UserRole);
 
 impl UserRoleExt {
     pub fn is_admin(&self) -> bool {
-        self.0 == "admin"
+        self.0 == UserRole::Admin
     }
 }
 
@@ -136,7 +137,11 @@ pub async fn auth_middleware(
                 // Parse user_id from claims
                 if let Ok(user_id) = Uuid::parse_str(&decoded.claims.sub) {
                     // Add user_id and role to request extensions
-                    let role = decoded.claims.role.clone().unwrap_or_else(|| "user".to_string());
+                    let role_str = decoded.claims.role.clone().unwrap_or_else(|| "user".to_string());
+                    let role = match role_str.as_str() {
+                        "admin" => UserRole::Admin,
+                        _ => UserRole::User,
+                    };
                     req.extensions_mut().insert(user_id);
                     req.extensions_mut().insert(OptionalUser(Some(user_id)));
                     req.extensions_mut().insert(UserRoleExt(role));

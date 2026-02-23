@@ -11,8 +11,8 @@ use dioxus::prelude::*;
 
 use crate::services::CalendarService;
 use crate::error::AppError;
-use crate::models::{NewCalendar, NewEvent, NewShare, NewUser, UpdateCalendar, UpdateEvent};
-use crate::middleware::OptionalUser;
+use crate::models::{NewCalendar, NewEvent, NewShare, NewUser, UpdateCalendar, UpdateEvent, UserRole};
+use crate::middleware::{OptionalUser, UserRoleExt};
 use crate::ui::*;
 
 /// Query parameters for flash messages
@@ -736,4 +736,66 @@ pub async fn delete_share_handler(
     service.delete_share(share_id).await?;
     
     Ok(Redirect::to(&format!("/web/calendars/{}?message=Share removed&flash_type=success", calendar_id)).into_response())
+}
+
+// ============== Admin Pages ==============
+
+/// Role update form data
+#[derive(Debug, Deserialize)]
+pub struct RoleFormInput {
+    pub role: String,
+}
+
+/// Show admin page (admin only)
+pub async fn admin_page(
+    State(service): State<CalendarService>,
+    Extension(user): Extension<Uuid>,
+    Extension(role): Extension<UserRoleExt>,
+    Query(query): Query<FlashQuery>,
+) -> Result<Html<String>, AppError> {
+    // Check if user is admin
+    if role.0 != UserRole::Admin {
+        return Err(AppError::AuthenticationError("Admin access required".to_string()));
+    }
+    
+    let user_model = service.get_user_by_id(user).await?
+        .ok_or_else(|| AppError::AuthenticationError("User not found".to_string()))?;
+    
+    let users = service.get_all_users().await?;
+    
+    let html = render_to_html(
+        rsx! {
+            AdminPage {
+                current_user: user_model,
+                users: users,
+                flash_message: query.message,
+                flash_type: query.flash_type,
+            }
+        }
+    )?;
+    
+    Ok(Html(html))
+}
+
+/// Handle role update (admin only)
+pub async fn update_user_role_handler(
+    State(service): State<CalendarService>,
+    Extension(role): Extension<UserRoleExt>,
+    Path(user_id): Path<Uuid>,
+    Form(form): Form<RoleFormInput>,
+) -> Result<Response, AppError> {
+    // Check if user is admin
+    if role.0 != UserRole::Admin {
+        return Err(AppError::AuthenticationError("Admin access required".to_string()));
+    }
+    
+    let new_role = match form.role.as_str() {
+        "admin" => UserRole::Admin,
+        "user" => UserRole::User,
+        _ => return Err(AppError::ValidationError("Invalid role".to_string())),
+    };
+    
+    service.update_user_role(user_id, new_role).await?;
+    
+    Ok(Redirect::to("/web/admin?message=User role updated&flash_type=success").into_response())
 }
